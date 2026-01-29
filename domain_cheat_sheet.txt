@@ -1,0 +1,14 @@
+@192.168.107.129
+  .jmu.lab
+    - example
+  .lab
+    - main
+    - computer
+  .test
+    - first
+    - second
+    - third
+
+@192.168.107.129
+  .jmu.lab
+    - example
