@@ -19,3 +19,10 @@ Delegated Server
     - alley 192.168.107.68
     - shea  192.168.107.69
     - john  192.168.107.67
+
+
+DNS Client
+@192.168.107.130
+
+WireShark VM
+@192.168.107.131
