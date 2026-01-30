@@ -1,22 +1,21 @@
 Authoritative Server
 @192.168.107.129
-  .jmu.lab
-    - example
   .lab
-    - main
-    - computer
+    - .jmu  192.168.107.128
+    - main  192.168.107.1
+    - computer  192.168.107.2
   .test
-    - first
-    - second
-    - third
+    - first 192.168.107.49
+    - second  192.168.107.48
+    - third 192.168.107.47
 
 Delegated Server
 @192.168.107.128
   .jmu.lab
-    - example
-    - king
-    - main
-    - quad
-    - alley
-    - shea
-    - john
+    - example 192.168.107.50
+    - king  192.168.107.66
+    - main  192.168.107.65
+    - quad  192.168.107.64
+    - alley 192.168.107.68
+    - shea  192.168.107.69
+    - john  192.168.107.67
