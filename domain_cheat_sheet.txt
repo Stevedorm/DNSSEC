@@ -1,3 +1,4 @@
+Authoritative Server
 @192.168.107.129
   .jmu.lab
     - example
@@ -9,7 +10,8 @@
     - second
     - third
 
-@192.168.107.129
+Delegated Server
+@192.168.107.128
   .jmu.lab
     - example
     - alley
