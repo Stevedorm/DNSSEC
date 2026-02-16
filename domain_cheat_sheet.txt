@@ -2,12 +2,7 @@ Authoritative Server
 @192.168.107.129
   .lab
     - .jmu  192.168.107.128
-    - main  192.168.107.1
     - computer  192.168.107.2
-  .test
-    - first 192.168.107.49
-    - second  192.168.107.48
-    - third 192.168.107.47
 
 Delegated Server
 @192.168.107.128
