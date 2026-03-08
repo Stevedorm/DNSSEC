@@ -1,10 +1,10 @@
 Authoritative Server
 @192.168.107.129
   .lab
-    - .jmu  192.168.107.128
+    - .jmu ZONE  192.168.107.128
     - computer  192.168.107.2
 
-Delegated Server
+Delegated/Child Server
 @192.168.107.128
   .jmu.lab
     - example 192.168.107.50
