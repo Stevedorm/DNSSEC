@@ -1,2 +1,22 @@
 TO-DO:
 Make structs for pcap headers and data withing the queries.
+
+
+RRSIG Structure from my writeup:
+The is a lot of information in the fields that come with an RRSIG resource record. After the
+computer.lab domain name and the TTL, 86400, the first field is the type, being a RRSIG
+for an address record. After that, there is the algorithm field, 8 standing for RSASHA256.
+The next field is the labels field, which represents the count of labels in the domain name,
+excluding the root. The next field is the original TTL of the RRset, which is the value it is
+given in the authoritative zone. The field that follows the TTL is the signature expiration
+and inception fields. These are 32-bit unsigned integers, represented in the number of
+seconds since January 1st, 1970, or like the format above, being YYYYMMDDhhmmss,
+years, months, days, hours in 24 hour format, minutes and seconds. The latter format is
+distinguishable by having exactly 14 digits. The seconds option with be a 32-bit integer
+16
+that won’t be longer than 10 digits. The inception date specifies when it was created, and
+the expiration date being when it is no longer valid. Next is the key tag field, which holds
+the key tag of the signing key, in this instance the ZSK for the lab zone.
+All of the metadata inside the RRSIG Record, from the type to the keytag, gets concatenated
+and then hashed, then signed with the ZSK. This creates the signature which is the last piece
+of the RRSIG resource record puzzle.
