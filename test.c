@@ -42,8 +42,20 @@ void parse_rdata(uint8_t *buf, r_data_t *r) {
 }
 
 int main (int argc, char *argv[]) {
+    time_t rawtime;
+    struct tm *timeinfo;
 
-    // FILE *data = fopen("in-a-hex.txt", "r");
+    time(&rawtime); 
+
+    timeinfo = gmtime(&rawtime);
+
+    // Check if gmtime was successful (it can return NULL on error).
+    if (timeinfo == NULL) {
+        perror("gmtime error");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("UTC Time: %2d:%02d:%02d\n", (timeinfo->tm_hour), timeinfo->tm_min, timeinfo->tm_sec);
 
     char hex[] = "000108030001518069bc4cd169aa311d37f9036a6d75036c616200";
     uint8_t buffer[24];

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #include <openssl/ssl.h>
 #include <openssl/evp.h>
