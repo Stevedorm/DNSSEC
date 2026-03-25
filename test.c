@@ -1,3 +1,14 @@
+//----------------------------------------------------
+// test.c, a dive into trying to create my own signatures 
+// to compare to valid signatures to verify the signature.
+//
+// Author: Steven Dormady   dormadsa@dukes.jmu.edu
+// Date: 04/17/2026         stevedorm2022@gmail.com
+//
+//----------------------------------------------------
+
+
+
 #include "test.h"
 
 /*
@@ -39,8 +50,8 @@ void parse_rdata(uint8_t *buf, r_data_t *r) {
     r->key_tag = ntohl(*(uint16_t*)buf);
     buf += 2;
 
-    // memcpy(r->signer_name, buf, 16);
-    // buf += 16;
+    memcpy(r->signer_name, buf, 16);
+    buf += 16;
 }
 
 static int parse_domain_name (const uint8_t *buf, size_t buf_len, size_t *offset, char *name, size_t name_len) {
@@ -122,13 +133,13 @@ int main (int argc, char *argv[]) {
     name = (char*)malloc(10 * sizeof(char));
     if (name == NULL) {
         perror("Error allocating memory");
-        exit(EXIT_FAILURE);
+        // exit(EXIT_FAILURE);
     }
 
     size_t name_len = 15;
     if (parse_domain_name(buffer, len, &name_len, name, 9) != 0) {
         perror("Error parsing domain name");
-        exit(EXIT_FAILURE);
+        // exit(EXIT_FAILURE);
     }
 
     memcpy(a_test.signer_name, name, 9);
@@ -155,6 +166,16 @@ int main (int argc, char *argv[]) {
 
     size_t hash_len = EVP_MD_get_size(EVP_sha256());
 
-    // EVP_Q_digest(NULL, "sha256", NULL, str, strlen(str), output_buffer, &hash_len);
+    char *output_buffer = (char*)malloc(hash_len);
+
+    EVP_Q_digest(NULL, "sha256", NULL, hex, strlen(hex), output_buffer, &hash_len);
+    printf("\nSHA-256 hash of hex string: ");
+    for (size_t i = 0; i < hash_len; i++) {
+        printf("%02x", (unsigned char)output_buffer[i]);
+    }
+    printf("\n");
+    int fd = open("hash.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    write(fd, output_buffer, hash_len);
+    close(fd);
     return 0;
 }

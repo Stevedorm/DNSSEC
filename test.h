@@ -35,3 +35,19 @@ typedef struct {
     uint16_t key_tag; // tag of the key used for signature.
     char signer_name[16]; // length of signer name, make an array? jmu.lab is 9 bytes long, but I will make it 16 to be safe.
 } r_data_t;
+
+
+
+
+
+// typedef struct {
+//     uint16_t type; // type of record. 48 for DNSKEY, 1 for A
+//     uint8_t algo; // algorithm used. 8 for RSASHA256
+//     uint8_t labels; // number of labels. quad.jmu.lab is 3.
+//     uint32_t ttl; // Time to live. Length of time in seconds 
+//                   //  that the record can be cached.
+//     uint32_t expiration; // expiration time in seconds since epoch
+//     uint32_t inception; // inception time in seconds since epoch
+//     uint16_t key_tag; // tag of the key used for signature.
+//     char signer_name[16]; // length of signer name.
+// } r_data_t;
