@@ -47,7 +47,7 @@ void parse_rdata(uint8_t *buf, r_data_t *r) {
     r->inception = ntohl(*(uint32_t*)buf);
     buf += 4;
 
-    r->key_tag = ntohl(*(uint16_t*)buf);
+    r->key_tag = ntohs(*(uint16_t*)buf);
     buf += 2;
 
     memcpy(r->signer_name, buf, 16);
@@ -164,18 +164,57 @@ int main (int argc, char *argv[]) {
     printf("key_tag: %x\n", a_test.key_tag);
     printf("signer_name: %s\n", a_test.signer_name);
 
+    // EVP_PKEY_sign() to create a signature using the private key and the data to be signed. This will involve specifying the algorithm and providing the data in the correct format.
+    printf("test1\n");
+    fflush(stdout);
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+
     size_t hash_len = EVP_MD_get_size(EVP_sha256());
 
     char *output_buffer = (char*)malloc(hash_len);
+    // SHA256_CTX sha256;
+    // SHA256_Init(&sha256);
+    // SHA256_Update(&sha256, hex, strlen(hex));
+    // SHA256_Final((unsigned char*)output_buffer, &sha256);
 
-    EVP_Q_digest(NULL, "sha256", NULL, hex, strlen(hex), output_buffer, &hash_len);
+    // EVP_Q_digest(NULL, "sha256", NULL, hex, strlen(hex), output_buffer, &hash_len);
     printf("\nSHA-256 hash of hex string: ");
     for (size_t i = 0; i < hash_len; i++) {
         printf("%02x", (unsigned char)output_buffer[i]);
     }
-    printf("\n");
-    int fd = open("hash.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    write(fd, output_buffer, hash_len);
-    close(fd);
+    printf("\ntest\n");
+    fflush(stdout);
+    FILE * fp = fopen("../keys/jmu-lab/public_key.pem","rb");
+    printf("test2\n");
+    fflush(stdout);
+    EVP_PKEY *key = EVP_PKEY_new() ;
+    key = PEM_read_PUBKEY( fp, &key , NULL , NULL );
+    printf("test3\n");
+    fflush(stdout);
+    fclose(fp);
+
+    EVP_PKEY_CTX *ctx;
+
+    ctx = EVP_PKEY_CTX_new(key, NULL);
+    if (!ctx) {
+        fprintf(stderr, "Error creating context\n");
+        return EXIT_FAILURE;
+    }
+
+    if (EVP_PKEY_sign_init( ctx ) <= 0)
+    {
+        printf("Sign init failed");
+        EVP_PKEY_CTX_free( ctx ); exit( -1 ) ;
+    }
+
+    // printf("\nSHA-256 hash of hex string: ");
+    // for (size_t i = 0; i < hash_len; i++) {
+    //     printf("%02x", (unsigned char)output_buffer[i]);
+    // }
+    // printf("\n");
+    // int fd = open("hash.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // write(fd, output_buffer, hash_len);
+    // close(fd);
+    EVP_CIPHER_CTX_free(ctx);
     return 0;
 }

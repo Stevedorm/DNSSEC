@@ -18,6 +18,10 @@
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 
+#define MAX_SIGNER_NAME_LEN 16
+#define ALGORITHM EVP_PKEY_RSA_SHA256() // all in all function?
+#define HASH_ALGORITHM EVP_sha256() // Use SHA-256 for hashing
+
 
 struct a_rec {
 
