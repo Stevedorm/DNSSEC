@@ -1,0 +1,26 @@
+jmu.lab.                3600 IN DNSKEY 257 3 8 (
+                                AwEAAZf2mbLD0Yr1NeFa69Q6GAlm/f4sdvJWrwMHZh5g
+                                /n8c+QqACrBc94dr1VayDrFp6+XctI7htJm2weuaqRHr
+                                WysopYZwU9TA3rXjklXePmRAD04e4r3/iIwEF2vuP4pm
+                                NxQSmoVusqW1zLPtTa2EZRIa7EEpLr6fCFrpJC0LRY8j
+                                nnL90mbUStUSJdqISKOMm1hnEjtd5EvnGFsD9Vok9pBo
+                                qjGCyAoh1TLruOohXdzXHcavgl2rFX5b4RZQETeGDNK8
+                                FczzXtfKKXrDVhC/f4J2V5iug5NTPb3mIUmLoeJMhoR4
+                                bMXjYJ3+BNezkpihO67K/rVseqpXkalbaHJpIHM=
+                                ) ; KSK; alg = RSASHA256 ; key id = 34939
+jmu.lab.                3600 IN DNSKEY 256 3 8 (
+                                AwEAAc3kJQXHUvzhk3HfbBgZ3I6NwDb0afzdSsIsqsDi
+                                JcjIH4sbLYPFpPJhBVkL61V5JWKlVqQYSpoX1/iu7lQw
+                                EHDKNtr4NhslarKU06TqJmHS67UOtJxok19M3uNlRNZn
+                                msIGb52iIvKGUjHKcYdQkJozw+BuG6peI96GKex6ny+F
+                                ) ; ZSK; alg = RSASHA256 ; key id = 14329
+jmu.lab.                3600 IN RRSIG DNSKEY 8 2 3600 (
+                                20260408054243 20260325132346 34939 jmu.lab.
+                                f3AZizMGuZJl2h8XpE/FnZGp7kutdSuXR25tosim0yx9
+                                wKyZHaZyB+l24meoA6xQkyW9xrtFLiZAu+O983Co6HvE
+                                SO3FrKQuvjbrUzizwjI2/0AleHMt5mgKEWavH8Vo8vK0
+                                MYW0H00uVwt8Ifnv9RyTN8wZ6zmlAedz00AjAtZoOcAZ
+                                RQf1Y21uEV+5hmZyVoV0ySq2cTFV1QfAacq7haMclcrN
+                                hfcYTzAu11an7ALAoprsMLnBvmcfS8AKL35pf6F8u8w9
+                                tz4mrzY6nnc2uy6KBeM5gaS4CQNOdDYcayuHH/vRo/yj
+                                29s6rJT8XUy/8oXN/WQaMz2NxUr3Cd/f6g== )
