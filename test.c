@@ -18,6 +18,42 @@ Use the key tag to find the corresponding DNSKEY record and verify the signature
 Compare signatures, likely with a diff file.
 */
 
+/*
+1 for yes private, 0 for not private
+*/
+EVP_PKEY *load_key_pem(const char *filepath, int private) {
+    FILE *fp = fopen(filepath, "r");
+    if (!fp) {
+        fprintf(stderr, "Error opening private key file: %s\n", filepath);
+        return NULL;
+    }
+    EVP_PKEY *key = EVP_PKEY_new() ;
+    if (private) {
+        key = PEM_read_PrivateKey(fp, &key, NULL, NULL);
+        fclose(fp);
+        if (!key) {
+            fprintf(stderr, "Error reading private key from file: %s\n", filepath);
+            return NULL;
+        }
+        return key;
+    } else {
+        key = PEM_read_PUBKEY(fp, &key, NULL, NULL);
+        fclose(fp);
+        if (!key) {
+            fprintf(stderr, "Error reading public key from file: %s\n", filepath);
+            return NULL;
+        }
+        return key;
+    }
+    EVP_PKEY *key = PEM_read_PrivateKey(fp, NULL, NULL, NULL);
+    fclose(fp);
+    if (!key) {
+        fprintf(stderr, "Error reading private key from file: %s\n", filepath);
+        return NULL;
+    }
+    return key;
+}
+
 void hex_to_bytes(const char *hex, uint8_t *bytes, size_t len) {
     for (size_t i = 0; i < len; i++) {
         sscanf(hex + (2 * i), "%2hhx", &bytes[i]);
@@ -95,6 +131,8 @@ static int parse_domain_name (const uint8_t *buf, size_t buf_len, size_t *offset
 
 int main (int argc, char *argv[]) {
 
+    char *key = argv[1];
+
     time_t rawtime;
     struct tm *timeinfo;
 
@@ -168,30 +206,64 @@ int main (int argc, char *argv[]) {
     printf("test1\n");
     fflush(stdout);
     EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
+    EVP_DigestUpdate(mdctx, (unsigned char*)hex, strlen(hex));
 
-    size_t hash_len = EVP_MD_get_size(EVP_sha256());
+    // size_t hash_len = EVP_MD_get_size(EVP_sha256());
 
-    char *output_buffer = (char*)malloc(hash_len);
+    // char *output_buffer = (char*)malloc(hash_len);
     // SHA256_CTX sha256;
     // SHA256_Init(&sha256);
     // SHA256_Update(&sha256, hex, strlen(hex));
     // SHA256_Final((unsigned char*)output_buffer, &sha256);
-
-    // EVP_Q_digest(NULL, "sha256", NULL, hex, strlen(hex), output_buffer, &hash_len);
-    printf("\nSHA-256 hash of hex string: ");
-    for (size_t i = 0; i < hash_len; i++) {
-        printf("%02x", (unsigned char)output_buffer[i]);
+    for (size_t i = 0; i < strlen(hex); i++) {
+        printf("%02x", (unsigned char)hex[i]);
     }
+    printf("\n");
+
+    // EVP_Q_digest(NULL, "sha256", NULL, buffer, strlen(buffer), output_buffer, &hash_len);
+    printf("\nSHA-256 hash of hex string: ");
+    // for (size_t i = 0; i < hash_len; i++) {
+    //     printf("%02x", (unsigned char)output_buffer[i]);
+    // }
     printf("\ntest\n");
     fflush(stdout);
-    FILE * fp = fopen("../keys/jmu-lab/public_key.pem","rb");
+    // FILE * fp = fopen("./keys/jmu-lab/jmu_zsk_public.pem","rb");
     printf("test2\n");
     fflush(stdout);
-    EVP_PKEY *key = EVP_PKEY_new() ;
-    key = PEM_read_PUBKEY( fp, &key , NULL , NULL );
-    printf("test3\n");
-    fflush(stdout);
-    fclose(fp);
+
+    EVP_PKEY *key = NULL;
+
+    if (strstr(key, "private") != NULL) {
+        printf("Loading private key...\n");
+        key = load_key_pem("./keys/jmu-lab/jmu_zsk_private.pem", 1);
+        if (!key) {
+            fprintf(stderr, "Failed to load private key.\n");
+            return EXIT_FAILURE;
+        }
+        printf("Private key loaded successfully.\n");
+        EVP_PKEY_free(key);
+    } else if (strstr(key, "public") != NULL) {
+        printf("Loading public key...\n");
+        key = load_key_pem("./keys/jmu-lab/jmu_zsk_public.pem", 0);
+        if (!key) {
+            fprintf(stderr, "Failed to load public key.\n");
+            return EXIT_FAILURE;
+        }
+        printf("Public key loaded successfully.\n");
+        EVP_PKEY_free(key);
+    } else {
+        fprintf(stderr, "Invalid argument. Use 'private' or 'public'.\n");
+        return EXIT_FAILURE;
+    }
+
+    
+    
+    // key = PEM_read_PUBKEY(fp, NULL, NULL, NULL);
+    if (!key) {
+        fprintf(stderr, "Error reading public key\n");
+        return EXIT_FAILURE;
+    }
 
     EVP_PKEY_CTX *ctx;
 
@@ -206,15 +278,14 @@ int main (int argc, char *argv[]) {
         printf("Sign init failed");
         EVP_PKEY_CTX_free( ctx ); exit( -1 ) ;
     }
+    printf("test3\n");
+    fflush(stdout);
+    // fclose(fp);
+
 
     // printf("\nSHA-256 hash of hex string: ");
     // for (size_t i = 0; i < hash_len; i++) {
     //     printf("%02x", (unsigned char)output_buffer[i]);
     // }
-    // printf("\n");
-    // int fd = open("hash.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    // write(fd, output_buffer, hash_len);
-    // close(fd);
-    EVP_CIPHER_CTX_free(ctx);
     return 0;
 }
