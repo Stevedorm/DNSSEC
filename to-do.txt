@@ -2,6 +2,8 @@ TO-DO:
 Make structs for pcap headers and data withing the queries.
 
 
+
+
 RRSIG Structure from my writeup:
 The is a lot of information in the fields that come with an RRSIG resource record. After the
 computer.lab domain name and the TTL, 86400, the first field is the type, being a RRSIG
