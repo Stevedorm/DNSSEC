@@ -302,14 +302,14 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Signing failed\n");
         return 1;
     }
-    hexdump("Our generated signature", our_sig, our_sig_len);
+    hexdump("The generated signature", our_sig, our_sig_len);
 
     // Verify with public key
-    printf("=== Verifying our signature with public key ===\n");
+    printf("=== Verifying the generated signature with public key ===\n");
     if (verify_data(argv[2], sigbase, sigbase_len, our_sig, our_sig_len))
-        printf("PASS: Our signature verifies correctly\n\n");
+        printf("PASS: The generated signature verifies correctly\n\n");
     else
-        printf("FAIL: Our signature did not verify\n\n");
+        printf("FAIL: The generated signature did not verify\n\n");
 
     // Load and compare existing RRSIG
     unsigned char *existing_sig = NULL;
@@ -321,7 +321,7 @@ int main(int argc, char *argv[]) {
         // Verify existing sig with our public key
         printf("=== Verifying existing RRSIG with our public key ===\n");
         if (verify_data(argv[2], sigbase, sigbase_len, existing_sig, existing_sig_len))
-            printf("PASS: Existing RRSIG verifies correctly against our reconstructed data\n\n");
+            printf("PASS: Existing RRSIG verifies correctly against the reconstructed data\n\n");
         else
             printf("FAIL: Existing RRSIG did not verify - signature base may not match exactly\n\n");
 

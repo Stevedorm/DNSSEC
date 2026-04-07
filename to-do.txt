@@ -2,6 +2,29 @@ TO-DO:
 Make structs for pcap headers and data withing the queries.
 
 
++------------------+----------+------------------------------------------+
+| Field            | Size     | Description                              |
++------------------+----------+------------------------------------------+
+| Type Covered     | 2 bytes  | RR type being signed (A=0x0001)          |
+| Algorithm        | 1 byte   | 8 = RSASHA256                            |
+| Labels           | 1 byte   | Number of labels in owner name           |
+| Original TTL     | 4 bytes  | TTL from the RRSIG record                |
+| Sig Expiration   | 4 bytes  | Unix timestamp, big endian               |
+| Sig Inception    | 4 bytes  | Unix timestamp, big endian               |
+| Key Tag          | 2 bytes  | Key tag of signing ZSK                   |
+| Signer's Name    | variable | Zone name in DNS wire format             |
++------------------+----------+------------------------------------------+
+| Owner Name       | variable | RR owner name in DNS wire format         |
+| Type             | 2 bytes  | Same as type covered                     |
+| Class            | 2 bytes  | IN = 0x0001                              |
+| TTL              | 4 bytes  | Must match original TTL exactly          |
+| RDLENGTH         | 2 bytes  | Length of RDATA                          |
+| RDATA            | variable | The actual record data (e.g. IP address) |
++------------------+----------+------------------------------------------+
+
+
+
+
 RRSIG Structure from my writeup:
 The is a lot of information in the fields that come with an RRSIG resource record. After the
 computer.lab domain name and the TTL, 86400, the first field is the type, being a RRSIG
