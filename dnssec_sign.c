@@ -154,25 +154,45 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // --- Load private key ---
+    // Load private key
     FILE *f = fopen(argv[1], "r");
-    if (!f) { fprintf(stderr, "Error: cannot open private key\n"); return 1; }
+    if (!f) { 
+        fprintf(stderr, "Error: cannot open private key\n"); 
+        return 1; 
+    }
+
     EVP_PKEY *privkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
     fclose(f);
-    if (!privkey) { fprintf(stderr, "Error: failed to read private key\n"); return 1; }
+
+    if (!privkey) { 
+        fprintf(stderr, "Error: failed to read private key\n"); 
+        return 1;
+    }
     printf("Private key loaded: %d bits\n", EVP_PKEY_bits(privkey));
 
-    // --- Load public key ---
+    // Load public key
     f = fopen(argv[2], "r");
-    if (!f) { fprintf(stderr, "Error: cannot open public key\n"); return 1; }
+    if (!f) { 
+        fprintf(stderr, "Error: cannot open public key\n"); 
+        return 1;
+    }
+
     EVP_PKEY *pubkey = PEM_read_PUBKEY(f, NULL, NULL, NULL);
     fclose(f);
-    if (!pubkey) { fprintf(stderr, "Error: failed to read public key\n"); return 1; }
+
+    if (!pubkey) { 
+        fprintf(stderr, "Error: failed to read public key\n"); 
+        return 1; 
+    }
     printf("Public key loaded:  %d bits\n\n", EVP_PKEY_bits(pubkey));
 
-    // --- Load signature base from hex file ---
+    // Load signature base from hex file
     f = fopen(argv[3], "r");
-    if (!f) { fprintf(stderr, "Error: cannot open sigbase hex file\n"); return 1; }
+    if (!f) { 
+        fprintf(stderr, "Error: cannot open sigbase hex file\n"); 
+        return 1; 
+    }
+
     fseek(f, 0, SEEK_END);
     long hex_file_len = ftell(f);
     rewind(f);
@@ -185,15 +205,24 @@ int main(int argc, char *argv[]) {
 
     unsigned char *sigbase = NULL;
     size_t sigbase_len = 0;
-    if (!hex_to_bin(hex_str, &sigbase, &sigbase_len)) return 1;
+
+    if (!hex_to_bin(hex_str, &sigbase, &sigbase_len)) {
+        free(hex_str);
+        return 1;
+    }
     free(hex_str);
 
     hexdump("Signature base (from hex)", sigbase, sigbase_len);
+
     print_sha256("signature base", sigbase, sigbase_len);
 
-    // --- Load existing RRSIG base64 ---
+    // Load existing RRSIG base64
     f = fopen(argv[4], "r");
-    if (!f) { fprintf(stderr, "Error: cannot open RRSIG base64 file\n"); return 1; }
+    if (!f) { 
+        fprintf(stderr, "Error: cannot open RRSIG base64 file\n"); 
+        return 1; 
+    }
+
     fseek(f, 0, SEEK_END);
     long b64_file_len = ftell(f);
     rewind(f);
@@ -204,43 +233,50 @@ int main(int argc, char *argv[]) {
 
     unsigned char *existing_sig = NULL;
     size_t existing_sig_len = 0;
-    if (!b64_to_bin(b64_str, &existing_sig, &existing_sig_len)) return 1;
+
+    if (!b64_to_bin(b64_str, &existing_sig, &existing_sig_len)) {
+        free(b64_str);
+        return 1;
+    }
     free(b64_str);
 
     hexdump("Existing RRSIG signature", existing_sig, existing_sig_len);
 
-    // --- Generate our own signature ---
-    unsigned char *our_sig = NULL;
-    size_t our_sig_len = 0;
+    // Generate the signature
+    unsigned char *gen_sig = NULL;
+    size_t gen_sig_len = 0;
 
     EVP_MD_CTX *sign_ctx = EVP_MD_CTX_new();
     if (EVP_DigestSignInit(sign_ctx, NULL, EVP_sha256(), NULL, privkey) != 1 ||
         EVP_DigestSignUpdate(sign_ctx, sigbase, sigbase_len) != 1 ||
-        EVP_DigestSignFinal(sign_ctx, NULL, &our_sig_len) != 1) {
+        EVP_DigestSignFinal(sign_ctx, NULL, &gen_sig_len) != 1) {
         fprintf(stderr, "Error: signing init failed\n");
         return 1;
     }
-    our_sig = malloc(our_sig_len);
-    if (EVP_DigestSignFinal(sign_ctx, our_sig, &our_sig_len) != 1) {
+
+    gen_sig = malloc(gen_sig_len);
+
+    if (EVP_DigestSignFinal(sign_ctx, gen_sig, &gen_sig_len) != 1) {
         fprintf(stderr, "Error: signing final failed\n");
         return 1;
     }
+    
     EVP_MD_CTX_free(sign_ctx);
 
-    hexdump("Our generated signature", our_sig, our_sig_len);
+    hexdump("Generated signature", gen_sig, gen_sig_len);
 
-    // --- Verify our signature with public key ---
-    printf("=== Verify: our signature with public key ===\n");
+    // Verify generated signature with public key
+    printf("=== Verify: generated signature with public key ===\n");
     EVP_MD_CTX *verify_ctx = EVP_MD_CTX_new();
     if (EVP_DigestVerifyInit(verify_ctx, NULL, EVP_sha256(), NULL, pubkey) == 1 &&
         EVP_DigestVerifyUpdate(verify_ctx, sigbase, sigbase_len) == 1 &&
-        EVP_DigestVerifyFinal(verify_ctx, our_sig, our_sig_len) == 1)
-        printf("PASS: our signature verifies correctly\n\n");
+        EVP_DigestVerifyFinal(verify_ctx, gen_sig, gen_sig_len) == 1)
+        printf("PASS: generated signature verifies correctly\n\n");
     else
-        printf("FAIL: our signature did not verify\n\n");
+        printf("FAIL: generated signature did not verify\n\n");
     EVP_MD_CTX_free(verify_ctx);
 
-    // --- Verify existing RRSIG with public key ---
+    // Verify existing RRSIG with public key
     printf("=== Verify: existing RRSIG with public key ===\n");
     verify_ctx = EVP_MD_CTX_new();
     if (EVP_DigestVerifyInit(verify_ctx, NULL, EVP_sha256(), NULL, pubkey) == 1 &&
@@ -251,13 +287,13 @@ int main(int argc, char *argv[]) {
         printf("FAIL: existing RRSIG did not verify - sigbase may not match exactly\n\n");
     EVP_MD_CTX_free(verify_ctx);
 
-    // --- Binary comparison ---
-    compare_sigs(our_sig, our_sig_len, existing_sig, existing_sig_len);
+    // Binary comparison
+    compare_sigs(gen_sig, gen_sig_len, existing_sig, existing_sig_len);
 
     // Cleanup
     free(sigbase);
     free(existing_sig);
-    free(our_sig);
+    free(gen_sig);
     EVP_PKEY_free(privkey);
     EVP_PKEY_free(pubkey);
 

@@ -1,5 +1,5 @@
 /*
-    dnssec_rrsig_demo.c
+    new.c
 
     Build:
       gcc -Wall -Wextra -O2 new.c -o new -lssl -lcrypto
