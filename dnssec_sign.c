@@ -5,150 +5,25 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 
-// ---------------------------------------------------------------------------
-// Decode a hex string into bytes
-// e.g. "deadbeef" -> { 0xde, 0xad, 0xbe, 0xef }
-// ---------------------------------------------------------------------------
-int hex_to_bin(const char *hex, unsigned char **out, size_t *out_len) {
-    size_t hex_len = strlen(hex);
-    if (hex_len % 2 != 0) {
-        fprintf(stderr, "Error: odd hex string length\n");
-        return 0;
-    }
-    *out_len = hex_len / 2;
-    *out = malloc(*out_len);
 
-    for (size_t i = 0; i < *out_len; i++) {
-        unsigned int byte;
-        if (sscanf(hex + (i * 2), "%02x", &byte) != 1) {
-            fprintf(stderr, "Error: invalid hex at position %zu\n", i * 2);
-            free(*out);
-            return 0;
-        }
-        (*out)[i] = (unsigned char)byte;
-    }
-    return 1;
-}
-
-// ---------------------------------------------------------------------------
-// Decode a base64 string into bytes (handles newlines/whitespace)
-// ---------------------------------------------------------------------------
-int b64_to_bin(const char *b64, unsigned char **out, size_t *out_len) {
-    // Strip whitespace into a clean buffer
-    char *clean = malloc(strlen(b64) + 1);
-    int ci = 0;
-    for (int i = 0; b64[i]; i++)
-        if (b64[i] != ' ' && b64[i] != '\n' && b64[i] != '\r' && b64[i] != '\t')
-            clean[ci++] = b64[i];
-    clean[ci] = 0;
-
-    size_t bin_len = (ci * 3) / 4 + 4;
-    *out = malloc(bin_len);
-
-    BIO *b64_bio = BIO_new(BIO_f_base64());
-    BIO *mem_bio = BIO_new_mem_buf(clean, -1);
-    BIO_push(b64_bio, mem_bio);
-    BIO_set_flags(b64_bio, BIO_FLAGS_BASE64_NO_NL);
-
-    int decoded = BIO_read(b64_bio, *out, bin_len);
-    BIO_free_all(b64_bio);
-    free(clean);
-
-    if (decoded <= 0) {
-        fprintf(stderr, "Error: base64 decode failed\n");
-        free(*out);
-        return 0;
-    }
-
-    *out_len = decoded;
-    return 1;
-}
-
-// ---------------------------------------------------------------------------
-// Print a hex dump with ASCII
-// ---------------------------------------------------------------------------
-void hexdump(const char *label, unsigned char *data, size_t len) {
-    printf("\n=== %s (%zu bytes) ===\n", label, len);
-    for (size_t i = 0; i < len; i++) {
-        if (i % 16 == 0) printf("%04zx  ", i);
-        printf("%02x ", data[i]);
-        if ((i + 1) % 8 == 0 && (i + 1) % 16 != 0) printf(" ");
-        if ((i + 1) % 16 == 0) {
-            printf(" |");
-            for (size_t j = i - 15; j <= i; j++)
-                printf("%c", (data[j] >= 32 && data[j] < 127) ? data[j] : '.');
-            printf("|\n");
-        }
-    }
-    // Handle last partial line
-    if (len % 16 != 0) {
-        size_t remaining = len % 16;
-        for (size_t i = 0; i < 16 - remaining; i++) printf("   ");
-        if (remaining <= 8) printf(" ");
-        printf(" |");
-        for (size_t i = len - remaining; i < len; i++)
-            printf("%c", (data[i] >= 32 && data[i] < 127) ? data[i] : '.');
-        printf("|\n");
-    }
-    printf("\n");
-}
-
-// ---------------------------------------------------------------------------
-// Print the SHA-256 digest of a buffer
-// ---------------------------------------------------------------------------
-void print_sha256(const char *label, unsigned char *data, size_t len) {
-    unsigned char digest[32];
-    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-    EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
-    EVP_DigestUpdate(ctx, data, len);
-    unsigned int digest_len;
-    EVP_DigestFinal_ex(ctx, digest, &digest_len);
-    EVP_MD_CTX_free(ctx);
-
-    printf("SHA-256(%s):\n  ", label);
-    for (int i = 0; i < 32; i++) {
-        printf("%02x", digest[i]);
-        if ((i + 1) % 16 == 0 && i != 31) printf("\n  ");
-    }
-    printf("\n\n");
-}
-
-// ---------------------------------------------------------------------------
-// Binary comparison with first difference highlighted
-// ---------------------------------------------------------------------------
+// ==========================================
+// Function prototypes
+// ==========================================
+void hexdump(const char *label, unsigned char *data, size_t len);
+void print_sha256(const char *label, unsigned char *data, size_t len);
+int hex_to_bin(const char *hex, unsigned char **out, size_t *out_len);
+int b64_to_bin(const char *b64, unsigned char **out, size_t *out_len);
 void compare_sigs(unsigned char *a, size_t a_len,
-                  unsigned char *b, size_t b_len) {
-    printf("=== Binary Comparison ===\n");
-    printf("Generated signature length : %zu bytes\n", a_len);
-    printf("Existing  signature length : %zu bytes\n", b_len);
+                  unsigned char *b, size_t b_len);
 
-    if (a_len != b_len) {
-        printf("DIFFER: lengths do not match\n\n");
-        return;
-    }
-
-    int first_diff = -1;
-    for (size_t i = 0; i < a_len; i++) {
-        if (a[i] != b[i]) { first_diff = i; break; }
-    }
-
-    if (first_diff == -1) {
-        printf("MATCH: signatures are byte-for-byte identical\n\n");
-    } else {
-        printf("DIFFER: first difference at byte %d\n", first_diff);
-        printf("  Generated[%d] = 0x%02x\n", first_diff, a[first_diff]);
-        printf("  Existing [%d] = 0x%02x\n\n", first_diff, b[first_diff]);
-    }
-}
-
-// ---------------------------------------------------------------------------
+// ==========================================
 // Main
-// ---------------------------------------------------------------------------
+// ==========================================
 int main(int argc, char *argv[]) {
     if (argc != 5) {
         fprintf(stderr, "Usage: %s <private.pem> <public.pem> <sigbase.hex> <rrsig.b64>\n\n", argv[0]);
-        fprintf(stderr, "  private.pem  - ZSK private key in PEM format\n");
-        fprintf(stderr, "  public.pem   - ZSK public key in PEM format\n");
+        fprintf(stderr, "  private.pem  - private key in PEM format\n");
+        fprintf(stderr, "  public.pem   - public key in PEM format\n");
         fprintf(stderr, "  sigbase.hex  - signature base as a hex string file\n");
         fprintf(stderr, "  rrsig.b64    - existing RRSIG signature field as base64 file\n");
         return 1;
@@ -298,4 +173,134 @@ int main(int argc, char *argv[]) {
     EVP_PKEY_free(pubkey);
 
     return 0;
+}
+
+// ==========================================
+// Utility functions Below
+// ==========================================
+
+
+// Decode a hex string into bytes
+int hex_to_bin(const char *hex, unsigned char **out, size_t *out_len) {
+    size_t hex_len = strlen(hex);
+    if (hex_len % 2 != 0) {
+        fprintf(stderr, "Error: odd hex string length\n");
+        return 0;
+    }
+    *out_len = hex_len / 2;
+    *out = malloc(*out_len);
+
+    for (size_t i = 0; i < *out_len; i++) {
+        unsigned int byte;
+        if (sscanf(hex + (i * 2), "%02x", &byte) != 1) {
+            fprintf(stderr, "Error: invalid hex at position %zu\n", i * 2);
+            free(*out);
+            return 0;
+        }
+        (*out)[i] = (unsigned char)byte;
+    }
+    return 1;
+}
+
+// Decode a base64 string into bytes (handles newlines/whitespace)
+int b64_to_bin(const char *b64, unsigned char **out, size_t *out_len) {
+    // Strip whitespace into a clean buffer
+    char *clean = malloc(strlen(b64) + 1);
+    int ci = 0;
+    for (int i = 0; b64[i]; i++)
+        if (b64[i] != ' ' && b64[i] != '\n' && b64[i] != '\r' && b64[i] != '\t')
+            clean[ci++] = b64[i];
+    clean[ci] = 0;
+
+    size_t bin_len = (ci * 3) / 4 + 4;
+    *out = malloc(bin_len);
+
+    BIO *b64_bio = BIO_new(BIO_f_base64());
+    BIO *mem_bio = BIO_new_mem_buf(clean, -1);
+    BIO_push(b64_bio, mem_bio);
+    BIO_set_flags(b64_bio, BIO_FLAGS_BASE64_NO_NL);
+
+    int decoded = BIO_read(b64_bio, *out, bin_len);
+    BIO_free_all(b64_bio);
+    free(clean);
+
+    if (decoded <= 0) {
+        fprintf(stderr, "Error: base64 decode failed\n");
+        free(*out);
+        return 0;
+    }
+
+    *out_len = decoded;
+    return 1;
+}
+
+// Print a hex dump with ASCII
+void hexdump(const char *label, unsigned char *data, size_t len) {
+    printf("\n=== %s (%zu bytes) ===\n", label, len);
+    for (size_t i = 0; i < len; i++) {
+        if (i % 16 == 0) printf("%04zx  ", i);
+        printf("%02x ", data[i]);
+        if ((i + 1) % 8 == 0 && (i + 1) % 16 != 0) printf(" ");
+        if ((i + 1) % 16 == 0) {
+            printf(" |");
+            for (size_t j = i - 15; j <= i; j++)
+                printf("%c", (data[j] >= 32 && data[j] < 127) ? data[j] : '.');
+            printf("|\n");
+        }
+    }
+    // Handle last partial line
+    if (len % 16 != 0) {
+        size_t remaining = len % 16;
+        for (size_t i = 0; i < 16 - remaining; i++) printf("   ");
+        if (remaining <= 8) printf(" ");
+        printf(" |");
+        for (size_t i = len - remaining; i < len; i++)
+            printf("%c", (data[i] >= 32 && data[i] < 127) ? data[i] : '.');
+        printf("|\n");
+    }
+    printf("\n");
+}
+
+// Print the SHA-256 digest of a buffer
+void print_sha256(const char *label, unsigned char *data, size_t len) {
+    unsigned char digest[32];
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+    EVP_DigestUpdate(ctx, data, len);
+    unsigned int digest_len;
+    EVP_DigestFinal_ex(ctx, digest, &digest_len);
+    EVP_MD_CTX_free(ctx);
+
+    printf("SHA-256(%s):\n  ", label);
+    for (int i = 0; i < 32; i++) {
+        printf("%02x", digest[i]);
+        if ((i + 1) % 16 == 0 && i != 31) printf("\n  ");
+    }
+    printf("\n\n");
+}
+
+// Binary comparison with first difference highlighted
+void compare_sigs(unsigned char *a, size_t a_len,
+                  unsigned char *b, size_t b_len) {
+    printf("=== Binary Comparison ===\n");
+    printf("Generated signature length : %zu bytes\n", a_len);
+    printf("Existing  signature length : %zu bytes\n", b_len);
+
+    if (a_len != b_len) {
+        printf("DIFFER: lengths do not match\n\n");
+        return;
+    }
+
+    int first_diff = -1;
+    for (size_t i = 0; i < a_len; i++) {
+        if (a[i] != b[i]) { first_diff = i; break; }
+    }
+
+    if (first_diff == -1) {
+        printf("MATCH: signatures are byte-for-byte identical\n\n");
+    } else {
+        printf("DIFFER: first difference at byte %d\n", first_diff);
+        printf("  Generated[%d] = 0x%02x\n", first_diff, a[first_diff]);
+        printf("  Existing [%d] = 0x%02x\n\n", first_diff, b[first_diff]);
+    }
 }
