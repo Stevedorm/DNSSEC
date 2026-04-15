@@ -22,6 +22,12 @@ Make structs for pcap headers and data withing the queries.
 | RDATA            | variable | The actual record data (e.g. IP address) |
 +------------------+----------+------------------------------------------+
 
+hex_to_bin — bridges the gap between human-readable hex and the raw bytes OpenSSL needs. Your sigbase file stores data as text like "000108..." but the crypto functions need actual binary.
+b64_to_bin — does the same for base64. The RRSIG signature from dig comes as base64 text split across multiple lines. This strips the whitespace and decodes it to the raw 128 bytes OpenSSL can verify against.
+hexdump — your visual inspection tool. Without this you're blind to what bytes are actually being processed. The ASCII column is particularly useful for spotting DNS name labels.
+print_sha256 — lets you confirm the hash of your sigbase is consistent. If two runs produce different hashes your file has changed. If the hash matches but verification fails, the key is wrong.
+compare_sigs — goes beyond a simple match/no-match by pinpointing the exact byte of divergence, which tells you where to look in the sigbase construction.
+
 
 
 
