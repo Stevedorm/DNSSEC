@@ -22,7 +22,7 @@
 // ==========================================
 // Main - driver for all operations
 // ==========================================
-int main( int argc , char *argv [  ]  )
+int main( int argc , char *argv [] )
 {
     // -------------------------------------------------------
     // Argument validation
@@ -65,7 +65,7 @@ int main( int argc , char *argv [  ]  )
     }
 
     // Print bit length to confirm we loaded the right key (ZSK 1024 bits, KSK would be 2048 bits)
-    printf( "Private key loaded: %d bits\n" , EVP_PKEY_bits ( privkey ) );
+    printf( "Private key loaded: %d bits\n" , EVP_PKEY_bits( privkey ) );
     // Private key loaded successfully
     // ==============================
 
@@ -75,20 +75,20 @@ int main( int argc , char *argv [  ]  )
     f = fopen( argv [ 2 ]  , "r" );
     if  ( !f )
     { 
-        fprintf ( stderr , "Error: cannot open public key\n" ); 
+        fprintf( stderr , "Error: cannot open public key\n" ); 
         return EXIT_FAILURE;
     }
 
     // Generic PEM reader that can handle both RSA and ECDSA keys, works for RSA in this case
-    EVP_PKEY *pubkey = PEM_read_PUBKEY ( f , NULL , NULL , NULL );
+    EVP_PKEY *pubkey = PEM_read_PUBKEY( f , NULL , NULL , NULL );
     fclose( f );
 
     if  ( !pubkey )
     { 
-        fprintf ( stderr , "Error: failed to read public key\n" ); 
+        fprintf( stderr , "Error: failed to read public key\n" ); 
         return EXIT_FAILURE; 
     }
-    printf( "Public key loaded:  %d bits\n\n" , EVP_PKEY_bits ( pubkey ) );
+    printf( "Public key loaded:  %d bits\n\n" , EVP_PKEY_bits( pubkey ) );
     // Public key loaded successfully
     // ==============================
 
@@ -193,7 +193,7 @@ int main( int argc , char *argv [  ]  )
         return EXIT_FAILURE;
     }
 
-    if ( EVP_DigestSignInit  ( sign_ctx , NULL , HASH_ALGORITHM , NULL , privkey ) != 1 
+    if (   EVP_DigestSignInit    ( sign_ctx , NULL , HASH_ALGORITHM , NULL , privkey ) != 1 
         || EVP_DigestSignUpdate( sign_ctx , sigbase , sigbase_len ) != 1
         || EVP_DigestSignFinal ( sign_ctx , NULL , &gen_sig_len ) != 1 )
     {
@@ -228,7 +228,7 @@ int main( int argc , char *argv [  ]  )
         return EXIT_FAILURE;
     }
 
-    if ( EVP_DigestVerifyInit  ( verify_ctx , NULL , HASH_ALGORITHM , NULL , pubkey ) == 1 
+    if (   EVP_DigestVerifyInit  ( verify_ctx , NULL , HASH_ALGORITHM , NULL , pubkey ) == 1 
         && EVP_DigestVerifyUpdate( verify_ctx , sigbase , sigbase_len ) == 1 
         && EVP_DigestVerifyFinal ( verify_ctx , gen_sig , gen_sig_len ) == 1 )
     {
@@ -251,7 +251,7 @@ int main( int argc , char *argv [  ]  )
         return EXIT_FAILURE;
     }
 
-    if ( EVP_DigestVerifyInit  ( verify_ctx , NULL , HASH_ALGORITHM , NULL , pubkey ) == 1 
+    if (   EVP_DigestVerifyInit  ( verify_ctx , NULL , HASH_ALGORITHM , NULL , pubkey ) == 1 
         && EVP_DigestVerifyUpdate( verify_ctx , sigbase , sigbase_len ) == 1 
         && EVP_DigestVerifyFinal ( verify_ctx , existing_sig , existing_sig_len ) == 1 )
     {
