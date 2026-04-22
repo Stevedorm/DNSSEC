@@ -125,12 +125,11 @@ int main (  int argc , char *argv [  ]   )
     // Show the raw bytes so we can visually verify each field
     hexdump (  "Signature base  (  from hex  )" , sigbase , sigbase_len  );
 
-    
+    // Hash the signature base with SHA-256 and print the digest.
     print_sha256 (  "signature base" , sigbase , sigbase_len  );
 
     // ==============================
     // Load existing RRSIG base64
-    // ==============================
     f = fopen (  argv [ 4 ]  , "r"  );
     if  ( !f )
     { 
@@ -138,17 +137,19 @@ int main (  int argc , char *argv [  ]   )
         return EXIT_FAILURE; 
     }
 
+    // Read the entire base64 file into a string buffer.
     fseek (  f , 0 , SEEK_END  );
     long b64_file_len = ftell (  f  );
     rewind (  f  );
     char *b64_str = malloc (  b64_file_len + 1  );
     fread (  b64_str , 1 , b64_file_len , f  );
     fclose (  f  );
-    b64_str [ b64_file_len ]  = 0;
+    b64_str [ b64_file_len ]  = 0; // Null-terminate the string
 
     unsigned char *existing_sig = NULL;
     size_t existing_sig_len = 0;
 
+    // Convert the base64 string into binary signature bytes and store for later.
     if  (  !b64_to_bin (  b64_str , &existing_sig , &existing_sig_len  )  )
     {
         free (  b64_str  );
@@ -157,9 +158,14 @@ int main (  int argc , char *argv [  ]   )
     free (  b64_str  );
 
     hexdump (  "Existing RRSIG signature" , existing_sig , existing_sig_len  );
-    // ==============================
     // Existing RRSIG loaded
     // ==============================
+
+    // All arguments are loaded and ready to go at this point, we have:
+    // - privkey : the private key for signing
+    // - pubkey  : the public key for verification
+    // - sigbase  : the signature base bytes we constructed
+    // - existing_sig : the real RRSIG signature bytes from the zone, for comparison
 
     // ==============================
     // Generate the signature
@@ -167,13 +173,11 @@ int main (  int argc , char *argv [  ]   )
     unsigned char *gen_sig = NULL;
     size_t gen_sig_len = 0;
 
-    // ==============================
     // Sign the sigbase with the private key using SHA-256 and the private key
-    // ==============================
     EVP_MD_CTX *sign_ctx = EVP_MD_CTX_new ();
-    if  (  EVP_DigestSignInit (  sign_ctx , NULL , EVP_sha256 () , NULL , privkey  ) != 1 ||
-        EVP_DigestSignUpdate (  sign_ctx , sigbase , sigbase_len  ) != 1 ||
-        EVP_DigestSignFinal (  sign_ctx , NULL , &gen_sig_len  ) != 1  )
+    if  (  EVP_DigestSignInit   (  sign_ctx , NULL , EVP_sha256 () , NULL , privkey  ) != 1 ||
+           EVP_DigestSignUpdate (  sign_ctx , sigbase , sigbase_len  ) != 1 ||
+           EVP_DigestSignFinal  (  sign_ctx , NULL , &gen_sig_len  ) != 1  )
     {
         fprintf (  stderr , "Error: signing init failed\n"  );
         return EXIT_FAILURE;
@@ -181,6 +185,7 @@ int main (  int argc , char *argv [  ]   )
 
     gen_sig = malloc (  gen_sig_len  );
 
+    // Do final signing step to get the actual signature bytes. This is where the RSA operation happens.
     if  (  EVP_DigestSignFinal (  sign_ctx , gen_sig , &gen_sig_len  ) != 1  )
     {
         fprintf (  stderr , "Error: signing final failed\n"  );
@@ -199,9 +204,9 @@ int main (  int argc , char *argv [  ]   )
     // ==============================
     printf (  "=== Verify: generated signature with public key ===\n"  );
     EVP_MD_CTX *verify_ctx = EVP_MD_CTX_new ();
-    if  (  EVP_DigestVerifyInit (  verify_ctx , NULL , EVP_sha256 () , NULL , pubkey  ) == 1 &&
-        EVP_DigestVerifyUpdate (  verify_ctx , sigbase , sigbase_len  ) == 1 &&
-        EVP_DigestVerifyFinal (  verify_ctx , gen_sig , gen_sig_len  ) == 1  )
+    if  (  EVP_DigestVerifyInit   (  verify_ctx , NULL , EVP_sha256 () , NULL , pubkey  ) == 1 &&
+           EVP_DigestVerifyUpdate (  verify_ctx , sigbase , sigbase_len  ) == 1 &&
+           EVP_DigestVerifyFinal  (  verify_ctx , gen_sig , gen_sig_len  ) == 1  )
     {
         printf (  "PASS: generated signature verifies correctly\n\n"  );
     }
@@ -216,9 +221,9 @@ int main (  int argc , char *argv [  ]   )
     // ==============================
     printf (  "=== Verify: existing RRSIG with public key ===\n"  );
     verify_ctx = EVP_MD_CTX_new ();
-    if  (  EVP_DigestVerifyInit (  verify_ctx , NULL , EVP_sha256 () , NULL , pubkey  ) == 1 &&
-        EVP_DigestVerifyUpdate (  verify_ctx , sigbase , sigbase_len  ) == 1 &&
-        EVP_DigestVerifyFinal (  verify_ctx , existing_sig , existing_sig_len  ) == 1  )
+    if  (  EVP_DigestVerifyInit   (  verify_ctx , NULL , EVP_sha256 () , NULL , pubkey  ) == 1 &&
+           EVP_DigestVerifyUpdate (  verify_ctx , sigbase , sigbase_len  ) == 1 &&
+           EVP_DigestVerifyFinal  (  verify_ctx , existing_sig , existing_sig_len  ) == 1  )
     {
         printf (  "PASS: existing RRSIG verifies correctly\n\n"  );
     }
@@ -233,7 +238,7 @@ int main (  int argc , char *argv [  ]   )
     // Since RSA-PKCS1-v1_5 is deterministic, if the same key
     // signs the same data the output bytes are always identical.
     // A byte-for-byte match here is the strongest possible proof
-    // that our reconstruction is correct.
+    // that the reconstruction is correct.
     // ==============================
     compare_sigs (  gen_sig , gen_sig_len , existing_sig , existing_sig_len  );
 
@@ -248,7 +253,7 @@ int main (  int argc , char *argv [  ]   )
 }
 
 // ==========================================
-// Utility functions Below
+// Utility functions below
 // ==========================================
 
 // Decode a hex string into bytes
@@ -378,6 +383,7 @@ void print_sha256 (  const char *label , unsigned char *data , size_t len  )
     EVP_MD_CTX *ctx = EVP_MD_CTX_new ();
     EVP_DigestInit_ex (  ctx , EVP_sha256 () , NULL  );
     EVP_DigestUpdate (  ctx , data , len  );
+
     unsigned int digest_len;
     EVP_DigestFinal_ex (  ctx , digest , &digest_len  );
     EVP_MD_CTX_free (  ctx  );
@@ -396,6 +402,7 @@ void print_sha256 (  const char *label , unsigned char *data , size_t len  )
     }
     printf (  "\n\n"  );
 }
+
 // ==================================================================
 // Compare two signatures byte-by-byte and report the first difference
 // Provides a better way to understand how the generated signature differs
