@@ -167,7 +167,8 @@ int sign_data(const char *privkey_pem, unsigned char *data, int data_len,
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
     if (EVP_DigestSignInit(ctx, NULL, EVP_sha256(), NULL, pkey) != 1 ||
         EVP_DigestSignUpdate(ctx, data, data_len) != 1 ||
-        EVP_DigestSignFinal(ctx, NULL, sig_len) != 1) {
+        EVP_DigestSignFinal(ctx, NULL, sig_len) != 1) 
+    {
         fprintf(stderr, "Error: signing failed\n");
         EVP_MD_CTX_free(ctx);
         EVP_PKEY_free(pkey);
