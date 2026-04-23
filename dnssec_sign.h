@@ -11,10 +11,13 @@
 // Function prototypes
 // ==========================================
 
+// Functions to load keys and data from files
 EVP_PKEY *load_private_key( const char *filename );
 EVP_PKEY *load_public_key( const char *filename );
 bool load_signature( const char *filename , unsigned char **sig , size_t *sig_len );
 bool load_sigbase( const char *filename , unsigned char **sigbase , size_t *sigbase_len );
+
+//helper functions for debugging and data handling
 void hexdump (  const char *label , const unsigned char *data , size_t len  );
 void print_sha256 (  const char *label , unsigned char *data , size_t len  );
 int hex_to_bin (  const char *hex , unsigned char **out , size_t *out_len  );
