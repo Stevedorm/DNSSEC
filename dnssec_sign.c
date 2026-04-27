@@ -54,7 +54,6 @@ int main( int argc , char *argv [] )
 
     // Print bit length to confirm we loaded the right key (ZSK 1024 bits, KSK would be 2048 bits)
     printf( "Private key loaded: %d bits\n" , EVP_PKEY_bits( privkey ) );
-
     // Private key loaded successfully
     // =========================================================================
 
@@ -68,7 +67,6 @@ int main( int argc , char *argv [] )
         fprintf( stderr , "Error: failed to read public key\n" );
         return EXIT_FAILURE;
     }
-
 
     printf( "Public key loaded:  %d bits\n\n" , EVP_PKEY_bits( pubkey ) );
     // Public key loaded successfully
@@ -84,16 +82,15 @@ int main( int argc , char *argv [] )
     {
         return EXIT_FAILURE;
     }
-    // signature base is loaded successfully
-    // =========================================================================
-
-
 
     // Show the raw bytes so we can visually verify each field
     hexdump( "Signature base ( from hex )" , sigbase , sigbase_len );
 
     // Hash the signature base with SHA-256 and print the digest.
     print_sha256( "signature base" , sigbase , sigbase_len );
+    // Signature base is loaded successfully
+    // =========================================================================
+
 
     // ==============================================
     // Load existing RRSIG base64 signature from file
