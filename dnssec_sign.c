@@ -279,7 +279,7 @@ bool load_signature( const char *filename , unsigned char **sig , size_t *sig_le
     FILE *f = fopen( filename , "r" );
     if  ( !f )
     { 
-        fprintf( stderr , "Error: cannot open signature file\n" ); 
+        fprintf( stderr , "Error: cannot open signature file\n" );
         return false;
     }
 
@@ -380,13 +380,19 @@ int hex_to_bin( const char *hex , unsigned char **out , size_t *out_len )
 // Written by Claude, adapted from OpenSSL BIO base64 decoding examples
 // Example: "AAEC" -> { 0x00, 0x01, 0x02 }
 // ==========================================
-int b64_to_bin( const char *b64 , unsigned char **out , size_t *out_len ) {
+int b64_to_bin( const char *b64 , unsigned char **out , size_t *out_len )
+{
     // Strip whitespace into a clean buffer
     char *clean = malloc( strlen( b64 ) + 1 );
     int ci = 0;
     for ( int i = 0; b64 [ i ] ; i++ )
-        if ( b64 [ i ]  != ' ' && b64 [ i ]  != '\n' && b64 [ i ]  != '\r' && b64 [ i ]  != '\t' )
-            clean [ ci++ ]  = b64 [ i ] ;
+    {
+        if (   b64 [ i ]  != ' ' && b64 [ i ]  != '\n' 
+            && b64 [ i ]  != '\r' && b64 [ i ]  != '\t' )
+            {
+                clean [ ci++ ]  = b64 [ i ] ;
+            }
+    }
     clean [ ci ]  = 0;
 
     size_t bin_len = ( ci * 3 ) / 4 + 4;
@@ -401,7 +407,8 @@ int b64_to_bin( const char *b64 , unsigned char **out , size_t *out_len ) {
     BIO_free_all( b64_bio );
     free( clean );
 
-    if ( decoded <= 0 ) {
+    if ( decoded <= 0 )
+    {
         fprintf( stderr , "Error: base64 decode failed\n" );
         free( *out );
         return 0;
