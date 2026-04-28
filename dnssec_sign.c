@@ -51,9 +51,6 @@ int main( int argc , char *argv [] )
     {
         return EXIT_FAILURE;
     }
-
-    // Print bit length to confirm we loaded the right key (ZSK 1024 bits, KSK would be 2048 bits)
-    printf( "Private key loaded: %d bits\n" , EVP_PKEY_bits( privkey ) );
     // Private key loaded successfully
     // =========================================================================
 
@@ -67,8 +64,6 @@ int main( int argc , char *argv [] )
         fprintf( stderr , "Error: failed to read public key\n" );
         return EXIT_FAILURE;
     }
-
-    printf( "Public key loaded:  %d bits\n\n" , EVP_PKEY_bits( pubkey ) );
     // Public key loaded successfully
     // =========================================================================
 
