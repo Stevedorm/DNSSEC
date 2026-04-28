@@ -91,7 +91,7 @@ int main( int argc , char *argv [] )
     // Load existing RRSIG base64 signature from file
     unsigned char *existing_sig = NULL;
     size_t existing_sig_len = 0;
-    if ( !load_sigbase( argv [ 4 ] , &existing_sig , &existing_sig_len ) )
+    if ( !load_signature( argv [ 4 ] , &existing_sig , &existing_sig_len ) )
     {
         return EXIT_FAILURE;
     }
