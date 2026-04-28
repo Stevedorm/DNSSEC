@@ -509,7 +509,7 @@ void compare_sigs ( const unsigned char *a , size_t a_len ,
     printf( "Generated signature length : %zu bytes\n" , a_len );
     printf( "Existing  signature length : %zu bytes\n" , b_len );
 
-    // length check is important because if the lengths differ, 
+    // Length check is important because if the lengths differ, 
     // we know right away they can't be identical, and it also 
     // prevents out-of-bounds access in the loop below
     if ( a_len != b_len )
@@ -542,4 +542,4 @@ void compare_sigs ( const unsigned char *a , size_t a_len ,
         printf( "  Generated [ %d ]  = 0x%02x\n" , first_diff , a [ first_diff ]  );
         printf( "  Existing  [ %d ]  = 0x%02x\n\n" , first_diff , b [ first_diff ]  );
     }
-}
+}openssl pkey -in ~/keys/jmu_zsk_private.pem -text -noout 2>/dev/null | grep -A 3 "pub:"
