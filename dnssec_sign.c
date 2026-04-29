@@ -542,4 +542,4 @@ void compare_sigs ( const unsigned char *a , size_t a_len ,
         printf( "  Generated [ %d ]  = 0x%02x\n" , first_diff , a [ first_diff ]  );
         printf( "  Existing  [ %d ]  = 0x%02x\n\n" , first_diff , b [ first_diff ]  );
     }
-}openssl pkey -in ~/keys/jmu_zsk_private.pem -text -noout 2>/dev/null | grep -A 3 "pub:"
+}
