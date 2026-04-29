@@ -22,14 +22,14 @@ clean:
 # Run make a after executable is compilied to generate 
 # and validate an A record signature
 a:
-	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/a.hex ./signatures/new/quad_a_sig.b64
+	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/a.hex ./signatures/quad_a_sig.b64
 
 # Run make dnskey after executable is compilied to generate 
 # and validate an DNSKEY record signature
 dnskey:
-	./dnssec_sign ~/keys/jmu_ksk_private.pem ./keys/jmu-lab/jmu_ksk_public.pem ./hex_in/new_dnskey.hex ./signatures/new/dnskey_jmu.b64
+	./dnssec_sign ~/keys/jmu_ksk_private.pem ./keys/jmu-lab/jmu_ksk_public.pem ./hex_in/dnskey.hex ./signatures/dnskey_jmu.b64
 
 # Run make ns after executable is compilied to generate 
 # and validate an NS record signature
 ns:
-	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/new_ns.hex ./signatures/new/quad_ns_sig.b64
+	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/ns.hex ./signatures/quad_ns_sig.b64
