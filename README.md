@@ -5,7 +5,7 @@ This repository contains the code that I wrote completing an Indpendent Study on
 
 The Make file contains comments and commands to compile, clean, and run the executable for the signature process for different records.
 
-The keys directory contains two subdirectories for each respective zone, .lab and .jmu.lab. These are the public KSK and ZSK for each zone. There is also a c file for converting the DNSSEC keys into RSA .pem keys, which I used Claude to help me write as well.
+The keys directory contains two subdirectories for each respective zone, .lab and .jmu.lab. These are the public KSK and ZSK for each zone. There is also a bind2pem.c file for converting the DNSSEC keys into RSA .pem keys, which I used Claude to help me write.
 
 The captures directory holds some pcap files that I used to pull hex data from to then hash and sign.
 
