@@ -224,15 +224,16 @@ int main( int argc , char *argv [] )
 // Utility functions below
 // ==========================================
 
-// Helper to print out record type to console
-char* record_type(unsigned char *record)
+// Helper to print out record type to console for easy viewing and cleaner output
+char* record_type( unsigned char *record )
 {
-    if (record == NULL)
+    if ( record == NULL )
     {
         fprintf( stderr , "Error: null record type\n" );
         return NULL;
     }
 
+    // Reconstruct the big-endian 16-bit type value from the two bytes
     uint16_t type = ( (uint16_t) record [ 0 ] << 8 ) | (uint16_t) record [ 1 ];
 
     switch ( type )
