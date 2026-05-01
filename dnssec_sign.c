@@ -237,11 +237,19 @@ char* record_type(unsigned char *record)
     switch (type)
     {
         case 0x0001:
-            fprintf (stdout, "A (Address Record)");
+            return "A (Address Record)";
+
         case 0x0002:
-            fprintf (stdout, "NS (Name Server Record)");
+            return "NS (Name Server Record)";
+
+        case 0x0006:
+            return "SOA (Start of Authority Record)";
+
+        case 0x0030:
+            return "DNSKEY (DNS Key Record)";
+
         default:
-            fprintf(stderr, "Error: unknown record type 0x%04X\n", type);
+            fprintf( stderr , "Error: unknown record type 0x%04X\n" , type );
             return "Unknown";
     }
 }
