@@ -79,7 +79,7 @@ int main( int argc , char *argv [] )
     }
     // Determine the type of record
 
-    unsigned char *record = {0x00, 0x00};
+    unsigned char record[2];
     memcpy( record, sigbase, 2 );
 
     char *type = record_type( record );
@@ -232,13 +232,17 @@ char* record_type(unsigned char *record)
         return NULL;
     }
 
-    switch ()
-    {
-        case 0x01:
-            fprintf (stdout, "");
+    uint16_t type = ((uint16_t)record[0] << 8) | (uint16_t)record[1];
 
+    switch (type)
+    {
+        case 0x0001:
+            fprintf (stdout, "A (Address Record)");
+        case 0x0002:
+            fprintf (stdout, "NS (Name Server Record)");
         default:
-            fprintf( stderr, "Error: bad record type" );
+            fprintf(stderr, "Error: unknown record type 0x%04X\n", type);
+            return "Unknown";
     }
 }
 
