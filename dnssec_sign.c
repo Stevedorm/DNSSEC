@@ -83,7 +83,7 @@ int main( int argc , char *argv [] )
     memcpy( record, sigbase, 2 );
 
     char *type = record_type( record );
-    fprintf(stdout, "%s", type);
+    fprintf(stdout, "\nRecord Type: %s\n", type);
     
     // Show the raw bytes so we can visually verify each field
     hexdump( "Signature base ( from hex )" , sigbase , sigbase_len );
