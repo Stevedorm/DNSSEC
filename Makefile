@@ -5,6 +5,7 @@
 
 # Run make compile to compile the code for the other commands below
 compile:
+	@echo
 	gcc -Wall dnssec_sign.c -o dnssec_sign -lcrypto
 	@echo
 	@echo Code Compiled!!
@@ -14,6 +15,7 @@ compile:
 
 # Run make clean to make a fresh executable
 clean:
+	@echo
 	rm -f dnssec_sign
 	@echo
 	@echo Executable Removed!!
@@ -22,14 +24,23 @@ clean:
 # Run make a after executable is compilied to generate 
 # and validate an A record signature
 a:
+	@echo
+	@echo Command that was run is seen below
 	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/a.hex ./signatures/quad_a_sig.b64
+	@echo
 
 # Run make dnskey after executable is compilied to generate 
 # and validate an DNSKEY record signature
 dnskey:
+	@echo
+	@echo Command that was run is seen below
 	./dnssec_sign ~/keys/jmu_ksk_private.pem ./keys/jmu-lab/jmu_ksk_public.pem ./hex_in/dnskey.hex ./signatures/dnskey_jmu.b64
+	@echo
 
 # Run make ns after executable is compilied to generate 
 # and validate an NS record signature
 ns:
+	@echo
+	@echo Command that was run is seen below
 	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/ns.hex ./signatures/quad_ns_sig.b64
+	@echo

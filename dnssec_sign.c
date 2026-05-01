@@ -31,7 +31,7 @@ int main( int argc , char *argv [] )
     //   3. sigbase.hex  - the signature base we constructed
     //   4. rrsig.b64    - the real signature from the zone
     // -------------------------------------------------------
-    fprintf( stdout , "\n\n");
+    fprintf( stdout , "\n=============================================\n");
     if ( argc != 5 )
     {
         fprintf( stderr , "Usage: %s <private.pem> <public.pem> <sigbase.hex> <rrsig.b64>\n\n" , argv [ 0 ]  );
@@ -55,7 +55,7 @@ int main( int argc , char *argv [] )
     // Private key loaded successfully
     // =========================================================================
 
-    fprintf( stdout , "\n");
+
 
     // =========================================================================
     // Load public key
@@ -95,7 +95,7 @@ int main( int argc , char *argv [] )
     // =========================================================================
 
 
-    // ==============================================
+    // =========================================================================
     // Load existing RRSIG base64 signature from file
     unsigned char *existing_sig = NULL;
     size_t existing_sig_len = 0;
@@ -106,7 +106,7 @@ int main( int argc , char *argv [] )
 
     hexdump( "Existing RRSIG signature" , existing_sig , existing_sig_len );
     // Existing RRSIG loaded
-    // ==============================================
+    // =========================================================================
 
     
     // All arguments are loaded and ready to go at this point, we have:
@@ -154,8 +154,10 @@ int main( int argc , char *argv [] )
 
     hexdump( "Generated signature" , gen_sig , gen_sig_len );
 
+
+
     // ==============================
-    // Verify generated signature with public key
+    // Verify generated Signature with public key
     // ==============================
     printf( "=== Verify: generated signature with public key ===\n" );
     EVP_MD_CTX *verify_ctx = EVP_MD_CTX_new ();
@@ -176,11 +178,16 @@ int main( int argc , char *argv [] )
         printf( "FAIL: generated signature did not verify\n\n" );
     }
     EVP_MD_CTX_free( verify_ctx );
+    // ==============================
+    // Generated Signature has been verified (or not...)
+    // ==============================
+
+
 
     // ==============================
-    // Verify existing RRSIG with public key
+    // Verify existing Signature with public key
     // ==============================
-    printf( "=== Verify: existing RRSIG with public key ===\n" );
+    printf( "=== Verify: existing signature with public key ===\n" );
     verify_ctx = EVP_MD_CTX_new ();
     if( !verify_ctx )
     {
@@ -192,14 +199,19 @@ int main( int argc , char *argv [] )
         && EVP_DigestVerifyUpdate( verify_ctx , sigbase , sigbase_len ) == 1 
         && EVP_DigestVerifyFinal ( verify_ctx , existing_sig , existing_sig_len ) == 1 )
     {
-        printf( "PASS: existing RRSIG verifies correctly\n\n" );
+        printf( "PASS: existing signature verifies correctly\n\n" );
     }
     else
     {
-        printf( "FAIL: existing RRSIG did not verify - sigbase may not match exactly\n\n" );
+        printf( "FAIL: existing signature did not verify - sigbase may not match exactly\n\n" );
     }
 
     EVP_MD_CTX_free( verify_ctx );
+    // ==============================
+    // Exisiting Signature has been verified (or not...)
+    // ==============================
+
+
 
     // ==============================
     // Binary comparison
@@ -236,6 +248,7 @@ char* record_type( unsigned char *record )
     // Reconstruct the big-endian 16-bit type value from the two bytes
     uint16_t type = ( (uint16_t) record [ 0 ] << 8 ) | (uint16_t) record [ 1 ];
 
+    // Add more records as needed below, with two bytes of length
     switch ( type )
     {
         case 0x0001:
@@ -382,6 +395,53 @@ bool load_sigbase( const char *filename , unsigned char **sigbase , size_t *sigb
     return true;
 }
 
+// ==================================================================
+// Compare two signatures byte-by-byte and report the first difference
+// Provides a better way to understand how the generated signature differs
+// from the existing one, beyond just "verify failed"
+// ==================================================================
+void compare_sigs ( const unsigned char *a , size_t a_len ,
+                  const unsigned char *b , size_t b_len )
+{
+    printf( "=== Binary Comparison ===\n" );
+    printf( "Generated signature length : %zu bytes\n" , a_len );
+    printf( "Existing  signature length : %zu bytes\n" , b_len );
+
+    // Length check is important because if the lengths differ, 
+    // we know right away they can't be identical, and it also 
+    // prevents out-of-bounds access in the loop below
+    if ( a_len != b_len )
+    {
+        printf( "DIFFER: lengths do not match\n\n" );
+        return;
+    }
+
+    // Loop through and compare each byte until we find a difference, 
+    // then report the offset and byte values
+    int first_diff = -1;
+    for ( size_t i = 0; i < a_len; i++ )
+    {
+        if ( a [ i ]  != b [ i ]  )
+        {
+            first_diff = i;
+            break;
+        }
+    }
+
+    // If no differences found, the signatures are identical.
+    // Otherwise, show the first byte that differs.
+    if ( first_diff == -1 )
+    {
+        printf( "MATCH: signatures are byte-for-byte identical\n" );
+    } 
+    else
+    {
+        printf( "DIFFER: first difference at byte %d\n" , first_diff );
+        printf( "  Generated [ %d ]  = 0x%02x\n" , first_diff , a [ first_diff ]  );
+        printf( "  Existing  [ %d ]  = 0x%02x\n\n" , first_diff , b [ first_diff ]  );
+    }
+    printf( "=============================================\n\n" );
+}
 
 // Decode a hex string into bytes
 int hex_to_bin( const char *hex , unsigned char **out , size_t *out_len )
@@ -538,51 +598,4 @@ void print_sha256( const char *label , unsigned char *data , size_t len )
         }
     }
     printf( "\n\n" );
-}
-
-// ==================================================================
-// Compare two signatures byte-by-byte and report the first difference
-// Provides a better way to understand how the generated signature differs
-// from the existing one, beyond just "verify failed"
-// ==================================================================
-void compare_sigs ( const unsigned char *a , size_t a_len ,
-                  const unsigned char *b , size_t b_len )
-{
-    printf( "=== Binary Comparison ===\n" );
-    printf( "Generated signature length : %zu bytes\n" , a_len );
-    printf( "Existing  signature length : %zu bytes\n" , b_len );
-
-    // Length check is important because if the lengths differ, 
-    // we know right away they can't be identical, and it also 
-    // prevents out-of-bounds access in the loop below
-    if ( a_len != b_len )
-    {
-        printf( "DIFFER: lengths do not match\n\n" );
-        return;
-    }
-
-    // Loop through and compare each byte until we find a difference, 
-    // then report the offset and byte values
-    int first_diff = -1;
-    for ( size_t i = 0; i < a_len; i++ )
-    {
-        if ( a [ i ]  != b [ i ]  )
-        {
-            first_diff = i;
-            break;
-        }
-    }
-
-    // If no differences found, the signatures are identical.
-    // Otherwise, show the first byte that differs.
-    if ( first_diff == -1 )
-    {
-        printf( "MATCH: signatures are byte-for-byte identical\n\n" );
-    } 
-    else
-    {
-        printf( "DIFFER: first difference at byte %d\n" , first_diff );
-        printf( "  Generated [ %d ]  = 0x%02x\n" , first_diff , a [ first_diff ]  );
-        printf( "  Existing  [ %d ]  = 0x%02x\n\n" , first_diff , b [ first_diff ]  );
-    }
 }
