@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
@@ -11,6 +12,9 @@
 // ==========================================
 // Function prototypes
 // ==========================================
+
+// Helper to print the record type
+char* record_type(unsigned char *record);
 
 // Functions to load keys and data from files
 EVP_PKEY *load_private_key( const char *filename );

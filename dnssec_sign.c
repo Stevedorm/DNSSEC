@@ -77,7 +77,11 @@ int main( int argc , char *argv [] )
     {
         return EXIT_FAILURE;
     }
+    // Determine the type of record
 
+    uint8_t type = record_type( );
+    fprintf(stdout, "%s", record_type());
+    
     // Show the raw bytes so we can visually verify each field
     hexdump( "Signature base ( from hex )" , sigbase , sigbase_len );
 
@@ -215,6 +219,25 @@ int main( int argc , char *argv [] )
 // ==========================================
 // Utility functions below
 // ==========================================
+
+// Helper to print out record type to console
+char* record_type(unsigned char *record)
+{
+    if (record == NULL)
+    {
+        fprintf( stderr , "Error: null record type\n" );
+        return NULL;
+    }
+
+    switch ()
+    {
+        case 0x01:
+            fprintf (stdout, "");
+
+        default:
+            fprintf( stderr, "Error: bad record type" );
+    }
+}
 
 // Load a private key from a PEM file using OpenSSL's EVP_PKEY interface
 EVP_PKEY *load_private_key( const char *filename )
