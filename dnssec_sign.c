@@ -79,8 +79,11 @@ int main( int argc , char *argv [] )
     }
     // Determine the type of record
 
-    uint8_t type = record_type( );
-    fprintf(stdout, "%s", record_type());
+    unsigned char *record = {0x00, 0x00};
+    memcpy( record, sigbase, 2 );
+
+    char *type = record_type( record );
+    fprintf(stdout, "%s", type);
     
     // Show the raw bytes so we can visually verify each field
     hexdump( "Signature base ( from hex )" , sigbase , sigbase_len );
