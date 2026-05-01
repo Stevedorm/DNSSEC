@@ -31,6 +31,7 @@ int main( int argc , char *argv [] )
     //   3. sigbase.hex  - the signature base we constructed
     //   4. rrsig.b64    - the real signature from the zone
     // -------------------------------------------------------
+    fprintf( stdout , "\n\n");
     if ( argc != 5 )
     {
         fprintf( stderr , "Usage: %s <private.pem> <public.pem> <sigbase.hex> <rrsig.b64>\n\n" , argv [ 0 ]  );
@@ -54,7 +55,7 @@ int main( int argc , char *argv [] )
     // Private key loaded successfully
     // =========================================================================
 
-
+    fprintf( stdout , "\n");
 
     // =========================================================================
     // Load public key
@@ -79,11 +80,11 @@ int main( int argc , char *argv [] )
     }
     // Determine the type of record
 
-    unsigned char record[2];
-    memcpy( record, sigbase, 2 );
+    unsigned char record [ 2 ];
+    memcpy( record , sigbase , 2 );
 
     char *type = record_type( record );
-    fprintf(stdout, "\nRecord Type: %s\n", type);
+    fprintf( stdout , "\n=== Record Type: %s ===\n" , type );
     
     // Show the raw bytes so we can visually verify each field
     hexdump( "Signature base ( from hex )" , sigbase , sigbase_len );
@@ -232,9 +233,9 @@ char* record_type(unsigned char *record)
         return NULL;
     }
 
-    uint16_t type = ((uint16_t)record[0] << 8) | (uint16_t)record[1];
+    uint16_t type = ( (uint16_t) record [ 0 ] << 8 ) | (uint16_t) record [ 1 ];
 
-    switch (type)
+    switch ( type )
     {
         case 0x0001:
             return "A (Address Record)";
@@ -244,6 +245,9 @@ char* record_type(unsigned char *record)
 
         case 0x0006:
             return "SOA (Start of Authority Record)";
+
+        case 0x002b:
+            return "DS (Delgation Signer Record)";
 
         case 0x0030:
             return "DNSKEY (DNS Key Record)";
