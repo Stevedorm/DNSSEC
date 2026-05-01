@@ -16,6 +16,8 @@
 */
 
 
+char *trust_anchor_root_path = "~/lab-trust.key";
+
 // TODO: Group up main function , make code prettier , add more comments , etc.
 
 // =========================================================================
