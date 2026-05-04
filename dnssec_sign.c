@@ -61,6 +61,9 @@ int main( int argc , char *argv [] )
 
     // =========================================================================
     // Load public key
+    // Used in two separate verification passes:
+    //   (a) to verify the signature thats generated, and
+    //   (b) to verify the real RRSIG pulled from the zone.
     EVP_PKEY *pubkey = load_public_key( argv [ 2 ] );
     if  ( !pubkey )
     {
@@ -81,10 +84,8 @@ int main( int argc , char *argv [] )
         return EXIT_FAILURE;
     }
     // Determine the type of record
-
     unsigned char record [ 2 ];
     memcpy( record , sigbase , 2 );
-
     char *type = record_type( record );
     fprintf( stdout , "\n=== Record Type: %s ===\n" , type );
     

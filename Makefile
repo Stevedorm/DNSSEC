@@ -71,3 +71,9 @@ keys:
 	./bind2pem Kjmu.lab.+008+12978.private lab_zsk_private.pem
 	@echo
 	@echo All keys were generated successfully!
+
+clean-keys:
+	cd keys/jmu-lab/
+	rm -rf jmu*
+	cd ../lab
+	rm -rf lab*
