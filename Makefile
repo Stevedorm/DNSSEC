@@ -16,7 +16,7 @@ compile:
 	@echo Run make \(a, ns, or dnskey\) to sign those records!
 	@echo
 
-# Run make clean to make a fresh executable
+# Run make clean remove the old executable and make room for a new one!
 clean:
 	@echo
 	rm -f dnssec_sign
