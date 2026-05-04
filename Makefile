@@ -3,6 +3,9 @@
 # See different headers for different commands to run for
 # compiling, cleaning, and signing different records.
 
+#  Define the command names
+.PHONY: compile clean a ns dnskey soa keys clean-keys
+
 # Run make compile to compile the code for the other commands below
 compile:
 	@echo
@@ -45,35 +48,47 @@ ns:
 	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/ns.hex ./signatures/quad_ns_sig.b64
 	@echo
 
+# Run make ns after executable is compilied to generate 
+# and validate an NS record signature
+soa:
+	@echo
+	@echo Command that was run is seen below
+	@echo
+	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/new_soa.hex ./signatures/soa.b64
+	@echo
+
 # Run make keys to generate all of the key files to .pem files
 # This script requires the keys from the dns servers to be in 
 # the respective keys directory
 keys:
+#  If needed, command to recompile the bind2pem: gcc -Wall bind2pem.c -o bind2pem
 	@echo
 	@echo Commands to generate the public keys is below
 	@echo
-	cd keys
-	gcc -Wall bind2pem.c -o bind2pem
-	./bind2pem ../vm_files/Kjmu.lab.+008+34939.key /jmu-lab/jmu_ksk_public.pem
-	./bind2pem ../vm_files/Kjmu.lab.+008+49498.key /jmu-lab/jmu_zsk_public.pem
-	./bind2pem ../vm_files/Kjmu.lab.+008+05852.key /lab/lab_ksk_public.pem
-	./bind2pem ../vm_files/Kjmu.lab.+008+12978.key /lab/lab_zsk_public.pem
+	cd keys && \
+		./bind2pem ../vm_files/Kjmu.lab.+008+34939.key jmu-lab/jmu_ksk_public.pem && \
+		./bind2pem ../vm_files/Kjmu.lab.+008+49498.key jmu-lab/jmu_zsk_public.pem && \
+		./bind2pem ../vm_files/Klab.+008+05852.key lab/lab_ksk_public.pem && \
+		./bind2pem ../vm_files/Klab.+008+12978.key lab/lab_zsk_public.pem
 	@echo
 	@echo Commands to generate the private keys is below
 	@echo
-# Directory that holds my private key files, as well as another copy of bind2pem
-# check keyIds, make sure these directories are good
-	cd ~/keys
-	gcc -Wall bind2pem.c -o bind2pem
-	./bind2pem Kjmu.lab.+008+34939.private jmu_ksk_private.pem
-	./bind2pem Kjmu.lab.+008+49498.private jmu_zsk_private.pem
-	./bind2pem Kjmu.lab.+008+05852.private lab_ksk_private.pem
-	./bind2pem Kjmu.lab.+008+12978.private lab_zsk_private.pem
+	cd ~/keys && \
+		./bind2pem Kjmu.lab.+008+34939.private jmu_ksk_private.pem && \
+		./bind2pem Kjmu.lab.+008+49498.private jmu_zsk_private.pem && \
+		./bind2pem Klab.+008+05852.private lab_ksk_private.pem && \
+		./bind2pem Klab.+008+12978.private lab_zsk_private.pem
 	@echo
 	@echo All keys were generated successfully!
 
 clean-keys:
-	cd keys/jmu-lab/
-	rm -rf jmu*
-	cd ../lab
-	rm -rf lab*
+	rm -f keys/jmu-lab/jmu_zsk_public.pem \
+	      keys/jmu-lab/jmu_ksk_public.pem \
+	      keys/lab/lab_zsk_public.pem \
+	      keys/lab/lab_ksk_public.pem
+	rm -f ~/keys/jmu_zsk_private.pem \
+	      ~/keys/jmu_ksk_private.pem \
+	      ~/keys/lab_ksk_private.pem \
+	      ~/keys/lab_zsk_private.pem
+	@echo
+	@echo All keys removed!
