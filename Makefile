@@ -16,6 +16,17 @@ compile:
 	@echo Run make \(a, ns, or dnskey\) to sign those records!
 	@echo
 
+# Run make compile-keys to compile the bind2pem executable that is used in key conversion
+compile-keys:
+	@echo
+	gcc -o bind2pem bind2pem.c -lssl -lcrypto
+	@echo
+	@echo Key Conversion Script Compiled!!
+	@echo
+	@echo Run make keys to convert the keys to .pem files!
+	@echo These keys will be stored in their respected public/priavte directory!
+	@echo
+
 # Run make clean remove the old executable and make room for a new one!
 clean:
 	@echo
