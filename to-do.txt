@@ -1,6 +1,8 @@
 TO-DO:
 Make structs for pcap headers and data withing the queries.
 
+MAYBE RECOMP PRIVATE KEYS AND SIGN WIITH THEM TEST
+
 
 +------------------+----------+------------------------------------------+
 | Field            | Size     | Description                              |
