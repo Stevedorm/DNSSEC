@@ -1,16 +1,15 @@
 /*
  * bind2pem.c
  *
- * Converts BIND9 DNSSEC key files into PEM format using OpenSSL.
+ * Converts BIND9 DNSSEC key files into PEM format using OpenSSL 3.0+.
  *
  * BIND9 generates two files per DNSSEC key pair:
  *   Kexample.com.+008+12345.private  -- the private key in a custom text format
  *   Kexample.com.+008+12345.key      -- the public key as a DNS zone record (DNSKEY RR)
  *
- * This tool reads either file and writes a standard PEM file that can be
- * used by OpenSSL and most other tools:
- *   .private  ->  PEM private key  (RSA PRIVATE KEY block)
- *   .key      ->  PEM public key   (PUBLIC KEY block)
+ * This tool reads either file and writes a standard PEM file:
+ *   .private  ->  PEM private key  (-----BEGIN PRIVATE KEY-----)
+ *   .key      ->  PEM public key   (-----BEGIN PUBLIC KEY-----)
  *
  * Compile:
  *   gcc -o bind2pem bind2pem.c -lssl -lcrypto
@@ -21,28 +20,35 @@
  *
  * Note: Currently supports RSA keys only (algorithms 5 and 8).
  *       ECDSA (algorithm 13) uses a different wire format and is not handled.
+ *
+ * OpenSSL 3.0 note:
+ *   The old RSA_new() / RSA_set0_key() / EVP_PKEY_assign_RSA() API is deprecated.
+ *   This file uses the modern EVP_PKEY_fromdata() approach throughout, which
+ *   builds keys by passing an OSSL_PARAM array directly — no RSA struct needed.
+ * 
+ * Created by Claude
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <openssl/rsa.h>   // RSA key structures and functions
-#include <openssl/bn.h>    // BIGNUM — OpenSSL's arbitrary-precision integer type
-#include <openssl/pem.h>   // PEM read/write functions
-#include <openssl/evp.h>   // EVP_PKEY — generic key wrapper used by OpenSSL
+#include <openssl/bn.h>        // BIGNUM — arbitrary-precision integers
+#include <openssl/pem.h>       // PEM_write_PrivateKey / PEM_write_PUBKEY
+#include <openssl/evp.h>       // EVP_PKEY, EVP_PKEY_CTX, EVP_PKEY_fromdata
+#include <openssl/core_names.h>// OSSL_PKEY_PARAM_RSA_* constants
+#include <openssl/param_build.h>// OSSL_PARAM_BLD — helper for building param arrays
 
-#define MAX_LINE   4096    // Maximum length of a single line we will read
-#define MAX_FIELDS 20      // Maximum number of key: value pairs we expect in a .private file
+#define MAX_LINE   4096
+#define MAX_FIELDS 20
 
 /*
- * Field — a simple key/value pair.
- * Used to hold the parsed contents of a BIND .private file, which looks like:
+ * Field — a simple key/value pair used to hold one line from a BIND .private file.
  *
+ * Example .private file content:
  *   Algorithm: 8 (RSASHA256)
- *   Modulus: AQAB...
+ *   Modulus: AwEAAb3f...
  *   PublicExponent: AQAB
  *   PrivateExponent: ...
- *   etc.
  */
 typedef struct
 {
@@ -58,13 +64,10 @@ typedef struct
 /*
  * parse_bind_file()
  *
- * Opens a BIND .private key file and splits each line on the first ": "
- * separator, storing the left side as the key and the right side as the value
- * into the fields array.
+ * Opens a BIND .private key file and splits each "Key: Value" line into
+ * the fields array. Lines without a ": " separator are silently skipped.
  *
- * Lines that don't contain ": " (such as blank lines or comments) are skipped.
- *
- * Returns 1 on success, 0 on failure (e.g. file not found).
+ * Returns 1 on success, 0 if the file could not be opened.
  */
 int parse_bind_file( const char *filename, Field *fields, int *count )
 {
@@ -81,28 +84,27 @@ int parse_bind_file( const char *filename, Field *fields, int *count )
 
     while ( fgets( line, sizeof( line ), f ) )
     {
-        // Strip the trailing newline or carriage return so comparisons work cleanly
+        // Strip trailing newline / carriage return
         line[ strcspn( line, "\r\n" ) ] = 0;
 
-        // Look for the ": " separator that divides key from value
+        // Find the ": " separator between key name and value
         char *sep = strstr( line, ": " );
 
         if ( !sep )
         {
-            continue;   // Skip lines with no separator (blank lines, comments, etc.)
+            continue;   // Skip blank lines, comments, or malformed lines
         }
 
-        // Null-terminate at the separator so 'line' now holds just the key name
-        *sep = 0;
+        *sep = 0;   // Split the string: 'line' is now just the key name
 
         strncpy( fields[ *count ].key,   line,    255  );
-        strncpy( fields[ *count ].value, sep + 2, 4095 ); // sep+2 skips past ": "
+        strncpy( fields[ *count ].value, sep + 2, 4095 ); // sep+2 skips the ": "
 
         ( *count )++;
 
         if ( *count >= MAX_FIELDS )
         {
-            break;  // Safety cap — stop before overrunning the fields array
+            break;  // Guard against overrunning the fixed-size array
         }
     }
 
@@ -113,10 +115,8 @@ int parse_bind_file( const char *filename, Field *fields, int *count )
 /*
  * get_field()
  *
- * Searches the parsed fields array for a given key name and returns
- * a pointer to its value string, or NULL if the key is not found.
- *
- * Example: get_field(fields, count, "Modulus") returns the base64 modulus string.
+ * Linear search through the parsed fields array for a named key.
+ * Returns a pointer to the value string, or NULL if not found.
  */
 const char *get_field( Field *fields, int count, const char *key )
 {
@@ -134,24 +134,19 @@ const char *get_field( Field *fields, int count, const char *key )
 /*
  * b64_to_bn()
  *
- * Decodes a base64 string and interprets the raw bytes as a big-endian
- * unsigned integer, returning it as an OpenSSL BIGNUM.
+ * Decodes a base64 string and returns it as a BIGNUM (big-endian unsigned integer).
+ * BIND stores all RSA components as base64-encoded big-endian byte arrays,
+ * which maps directly to what BN_bin2bn() expects.
  *
- * BIND stores all RSA key components (modulus, exponents, primes, etc.)
- * as base64-encoded big-endian byte arrays, which is exactly what
- * BN_bin2bn() expects — so this is the natural conversion path.
+ * Ownership: the returned BIGNUM must be freed by the caller with BN_free(),
+ * unless it is handed to OSSL_PARAM_BLD_push_BN() which takes a reference.
  *
- * Returns a newly allocated BIGNUM on success, or NULL on failure.
- * The caller is responsible for freeing it with BN_free() unless it is
- * handed to RSA_set0_key() or similar, which takes ownership.
+ * Returns NULL on failure.
  */
 BIGNUM *b64_to_bn( const char *b64 )
 {
     int b64_len = strlen( b64 );
-
-    // Base64 expands 3 bytes into 4 chars, so decoded length is at most (len*3)/4
-    // We add a small buffer to be safe with padding
-    int bin_len = ( b64_len * 3 ) / 4 + 4;
+    int bin_len = ( b64_len * 3 ) / 4 + 4; // Upper bound on decoded size
 
     unsigned char *bin = malloc( bin_len );
 
@@ -160,20 +155,20 @@ BIGNUM *b64_to_bn( const char *b64 )
         return NULL;
     }
 
-    // OpenSSL's BIO chain: feed base64-encoded data through a base64 decoder
-    // BIO_f_base64() is the decoder filter, BIO_new_mem_buf() is the data source
+    // Use an OpenSSL BIO chain to base64-decode the string.
+    // BIO_f_base64() is the decoder filter; BIO_new_mem_buf() is the data source.
     BIO *b64_bio = BIO_new( BIO_f_base64() );
-    BIO *mem_bio = BIO_new_mem_buf( b64, -1 );  // -1 means use strlen() to find length
+    BIO *mem_bio = BIO_new_mem_buf( b64, -1 ); // -1 = use strlen internally
 
-    BIO_push( b64_bio, mem_bio );   // Chain: mem_bio -> b64_bio
+    BIO_push( b64_bio, mem_bio );
 
-    // BIO_FLAGS_BASE64_NO_NL tells the decoder not to expect/require line breaks
-    // BIND base64 values are single unbroken strings, so this flag is required
+    // BIO_FLAGS_BASE64_NO_NL: BIND values are single-line strings with no
+    // embedded newlines, so tell the decoder not to expect line breaks
     BIO_set_flags( b64_bio, BIO_FLAGS_BASE64_NO_NL );
 
     int decoded_len = BIO_read( b64_bio, bin, bin_len );
 
-    BIO_free_all( b64_bio );    // Frees both BIOs in the chain
+    BIO_free_all( b64_bio ); // Frees both BIOs in the chain
 
     if ( decoded_len <= 0 )
     {
@@ -181,7 +176,7 @@ BIGNUM *b64_to_bn( const char *b64 )
         return NULL;
     }
 
-    // Convert the raw binary big-endian bytes into a BIGNUM
+    // Interpret the raw bytes as a big-endian unsigned integer
     BIGNUM *bn = BN_bin2bn( bin, decoded_len, NULL );
 
     free( bin );
@@ -191,15 +186,13 @@ BIGNUM *b64_to_bn( const char *b64 )
 /*
  * b64_to_bin()
  *
- * Decodes a base64 string into a raw byte buffer.
- * Unlike b64_to_bn(), this does NOT interpret the bytes as an integer —
- * it just gives you the raw decoded bytes. This is needed for the DNSKEY
- * wire format blob in .key files, which contains multiple fields packed
- * together rather than a single integer.
+ * Decodes a base64 string into a raw byte buffer (not a BIGNUM).
+ * Used for the DNSKEY wire-format blob in .key files, which packs
+ * multiple fields together and must be parsed byte-by-byte.
  *
- * On success: allocates *out, fills it, and returns the number of bytes.
- * On failure: sets *out = NULL and returns -1.
- * The caller must free() *out when done.
+ * On success: allocates *out, fills it, returns byte count.
+ * On failure: sets *out = NULL, returns -1.
+ * Caller must free() *out.
  */
 int b64_to_bin( const char *b64, unsigned char **out )
 {
@@ -213,7 +206,7 @@ int b64_to_bin( const char *b64, unsigned char **out )
         return -1;
     }
 
-    // Same BIO chain as b64_to_bn() — base64 decoder over a memory buffer
+    // Same BIO chain as b64_to_bn()
     BIO *b64_bio = BIO_new( BIO_f_base64() );
     BIO *mem_bio = BIO_new_mem_buf( b64, -1 );
 
@@ -242,23 +235,25 @@ int b64_to_bin( const char *b64, unsigned char **out )
 /*
  * convert_private()
  *
- * Reads a BIND9 .private file and writes a PEM-encoded RSA private key.
+ * Reads a BIND9 .private file and writes a PEM-encoded RSA private key
+ * using the OpenSSL 3.0 EVP_PKEY_fromdata() API (no deprecated RSA_* calls).
  *
- * A BIND .private file for RSA looks like:
+ * BIND .private file RSA fields:
+ *   Modulus          n   -- the RSA modulus
+ *   PublicExponent   e   -- public exponent (almost always 65537)
+ *   PrivateExponent  d   -- private exponent
+ *   Prime1           p   -- first prime factor
+ *   Prime2           q   -- second prime factor
+ *   Exponent1        dmp1 = d mod (p-1)   \
+ *   Exponent2        dmq1 = d mod (q-1)    > CRT parameters for fast decryption
+ *   Coefficient      iqmp = q^-1 mod p    /
  *
- *   Private-key-format: v1.3
- *   Algorithm: 8 (RSASHA256)
- *   Modulus:          <base64>   -- the RSA modulus n
- *   PublicExponent:   <base64>   -- the public exponent e (usually 65537)
- *   PrivateExponent:  <base64>   -- the private exponent d
- *   Prime1:           <base64>   -- first prime factor p
- *   Prime2:           <base64>   -- second prime factor q
- *   Exponent1:        <base64>   -- d mod (p-1), CRT parameter
- *   Exponent2:        <base64>   -- d mod (q-1), CRT parameter
- *   Coefficient:      <base64>   -- q^-1 mod p,  CRT parameter
- *
- * The CRT (Chinese Remainder Theorem) parameters speed up private key
- * operations and are required by OpenSSL's RSA structure.
+ * OpenSSL 3.0 approach:
+ *   Instead of RSA_new() + RSA_set0_key() + EVP_PKEY_assign_RSA(), we:
+ *     1. Decode each field to a BIGNUM
+ *     2. Push all BIGNUMs into an OSSL_PARAM_BLD parameter builder
+ *     3. Call EVP_PKEY_fromdata() to build the EVP_PKEY directly
+ *   This avoids all deprecated RSA_* functions.
  *
  * Returns 1 on success, 0 on failure.
  */
@@ -272,7 +267,6 @@ int convert_private( const char *infile, const char *outfile )
         return 0;
     }
 
-    // Sanity check — confirm this is an algorithm we recognise before proceeding
     const char *algo = get_field( fields, count, "Algorithm" );
 
     if ( !algo )
@@ -283,7 +277,7 @@ int convert_private( const char *infile, const char *outfile )
 
     printf( "Algorithm: %s\n", algo );
 
-    // Pull all eight RSA components out of the parsed fields
+    // Retrieve all eight RSA component strings from the parsed file
     const char *mod  = get_field( fields, count, "Modulus"         );
     const char *pub  = get_field( fields, count, "PublicExponent"  );
     const char *priv = get_field( fields, count, "PrivateExponent" );
@@ -299,7 +293,7 @@ int convert_private( const char *infile, const char *outfile )
         return 0;
     }
 
-    // Decode each base64 field into a BIGNUM ready for OpenSSL
+    // Decode every base64 field into a BIGNUM
     BIGNUM *n    = b64_to_bn( mod  );   // modulus
     BIGNUM *e    = b64_to_bn( pub  );   // public exponent
     BIGNUM *d    = b64_to_bn( priv );   // private exponent
@@ -312,42 +306,93 @@ int convert_private( const char *infile, const char *outfile )
     if ( !n || !e || !d || !p || !q || !dmp1 || !dmq1 || !iqmp )
     {
         fprintf( stderr, "Error: failed to decode one or more key components\n" );
+        BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+        BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
         return 0;
     }
 
-    // Create an empty RSA key structure and populate it.
-    // Note: RSA_set0_* transfers ownership of the BIGNUMs to the RSA struct —
-    // do not free them separately after this point
-    RSA *rsa = RSA_new();
+    /*
+     * Build an OSSL_PARAM array describing the RSA key.
+     *
+     * OSSL_PARAM_BLD is a helper that lets us push named parameters
+     * (using the OSSL_PKEY_PARAM_RSA_* string constants from core_names.h)
+     * and then serialise them into an OSSL_PARAM array for EVP_PKEY_fromdata().
+     */
+    OSSL_PARAM_BLD *bld = OSSL_PARAM_BLD_new();
 
-    if ( !rsa )
+    if ( !bld )
     {
-        fprintf( stderr, "Error: RSA_new() failed\n" );
+        fprintf( stderr, "Error: OSSL_PARAM_BLD_new() failed\n" );
+        BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+        BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
         return 0;
     }
 
-    if ( RSA_set0_key( rsa, n, e, d )                 != 1 ||  // set n, e, d
-         RSA_set0_factors( rsa, p, q )                != 1 ||  // set p, q
-         RSA_set0_crt_params( rsa, dmp1, dmq1, iqmp ) != 1 )   // set CRT params
+    // Push each RSA component into the builder using its OpenSSL parameter name.
+    // OSSL_PARAM_BLD_push_BN() does NOT take ownership — BIGNUMs must stay
+    // alive until OSSL_PARAM_BLD_to_param() has been called below.
+    if ( !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_N,    n    ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_E,    e    ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_D,    d    ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_FACTOR1,   p    ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_FACTOR2,   q    ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_EXPONENT1, dmp1 ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_EXPONENT2, dmq1 ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_COEFFICIENT1, iqmp ) )
     {
-        fprintf( stderr, "Error: failed to set RSA key components\n" );
-        RSA_free( rsa );
+        fprintf( stderr, "Error: failed to push RSA parameters into builder\n" );
+        OSSL_PARAM_BLD_free( bld );
+        BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+        BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
         return 0;
     }
 
-    // Wrap the RSA key in an EVP_PKEY container.
-    // OpenSSL's PEM write functions work with EVP_PKEY rather than RSA directly,
-    // as EVP_PKEY is a generic wrapper that supports multiple key types.
-    // EVP_PKEY_assign_RSA() also transfers ownership of rsa to pkey.
-    EVP_PKEY *pkey = EVP_PKEY_new();
+    // Serialise the builder into a flat OSSL_PARAM array
+    OSSL_PARAM *params = OSSL_PARAM_BLD_to_param( bld );
 
-    if ( !pkey || EVP_PKEY_assign_RSA( pkey, rsa ) != 1 )
+    OSSL_PARAM_BLD_free( bld ); // Builder itself is no longer needed
+
+    if ( !params )
     {
-        fprintf( stderr, "Error: EVP_PKEY setup failed\n" );
-        RSA_free( rsa );
-        EVP_PKEY_free( pkey );
+        fprintf( stderr, "Error: OSSL_PARAM_BLD_to_param() failed\n" );
+        BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+        BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
         return 0;
     }
+
+    /*
+     * EVP_PKEY_fromdata() builds an EVP_PKEY from the parameter array.
+     * We need a context (EVP_PKEY_CTX) first, specifying "RSA" as the key type.
+     * EVP_PKEY_KEYPAIR means we are providing a full key pair (public + private).
+     */
+    EVP_PKEY_CTX *ctx  = EVP_PKEY_CTX_new_from_name( NULL, "RSA", NULL );
+    EVP_PKEY     *pkey = NULL;
+
+    if ( !ctx )
+    {
+        fprintf( stderr, "Error: EVP_PKEY_CTX_new_from_name() failed\n" );
+        OSSL_PARAM_free( params );
+        BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+        BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
+        return 0;
+    }
+
+    if ( EVP_PKEY_fromdata_init( ctx ) <= 0 ||
+         EVP_PKEY_fromdata( ctx, &pkey, EVP_PKEY_KEYPAIR, params ) <= 0 )
+    {
+        fprintf( stderr, "Error: EVP_PKEY_fromdata() failed for private key\n" );
+        EVP_PKEY_CTX_free( ctx );
+        OSSL_PARAM_free( params );
+        BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+        BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
+        return 0;
+    }
+
+    // Clean up everything that was only needed to build the key
+    EVP_PKEY_CTX_free( ctx );
+    OSSL_PARAM_free( params );
+    BN_free( n ); BN_free( e );    BN_free( d );    BN_free( p );
+    BN_free( q ); BN_free( dmp1 ); BN_free( dmq1 ); BN_free( iqmp );
 
     FILE *out = fopen( outfile, "w" );
 
@@ -358,9 +403,9 @@ int convert_private( const char *infile, const char *outfile )
         return 0;
     }
 
-    // Write the private key as a PEM file (unencrypted — no passphrase).
-    // The NULL cipher and NULL passphrase arguments mean the key is written
-    // in plaintext. Add encryption here if the key needs to be protected at rest.
+    // Write the private key as an unencrypted PEM file.
+    // NULL cipher + NULL passphrase = plaintext output.
+    // Add an encryption cipher here (e.g. EVP_aes_256_cbc()) to password-protect it.
     if ( PEM_write_PrivateKey( out, pkey, NULL, NULL, 0, NULL, NULL ) != 1 )
     {
         fprintf( stderr, "Error: PEM_write_PrivateKey failed\n" );
@@ -370,7 +415,7 @@ int convert_private( const char *infile, const char *outfile )
     }
 
     fclose( out );
-    EVP_PKEY_free( pkey );  // Also frees the RSA struct and all BIGNUMs inside it
+    EVP_PKEY_free( pkey );
 
     printf( "Success: private key written to %s\n", outfile );
     return 1;
@@ -384,25 +429,25 @@ int convert_private( const char *infile, const char *outfile )
 /*
  * convert_public()
  *
- * Reads a BIND9 .key file (a DNS zone file containing a DNSKEY record)
- * and writes a PEM-encoded RSA public key.
+ * Reads a BIND9 .key file (a DNS zone file with a DNSKEY record) and writes
+ * a PEM-encoded RSA public key using the OpenSSL 3.0 EVP_PKEY_fromdata() API.
  *
  * A BIND .key file looks like:
  *
- *   ; This is a key-signing key, keyid 12345, for example.com.
- *   example.com. 3600 IN DNSKEY 257 3 8 AwEAAb3...==
+ *   ; This is a zone-signing key, keyid 12345, for example.com.
+ *   example.com. 3600 IN DNSKEY 256 3 8 AwEAAb3f...==
  *
- * The DNSKEY record fields are:
- *   flags     -- 257 = KSK (key-signing key), 256 = ZSK (zone-signing key)
- *   protocol  -- always 3 for DNSSEC
- *   algorithm -- 8 = RSASHA256, 13 = ECDSAP256SHA256, etc.
- *   key blob  -- base64-encoded public key in DNS wire format
+ * DNSKEY record fields:
+ *   flags     256 = ZSK (zone-signing key), 257 = KSK (key-signing key)
+ *   protocol  always 3 for DNSSEC
+ *   algorithm 8 = RSASHA256, 5 = RSASHA1, etc.
+ *   blob      base64-encoded public key in RFC 3110 wire format
  *
- * RSA DNSKEY wire format (RFC 3110):
- *   byte  0:       if non-zero, this IS the exponent length in bytes
- *   byte  0:       if zero, bytes 1-2 are a 16-bit big-endian exponent length
- *   bytes offset .. offset+exp_len-1:  the public exponent e
- *   bytes offset+exp_len .. end:       the modulus n
+ * RSA DNSKEY wire format (RFC 3110 section 2):
+ *   byte  0:       if != 0 -> exponent length in bytes
+ *   byte  0:       if == 0 -> bytes 1+2 are a 16-bit big-endian exponent length
+ *   bytes [offset .. offset+exp_len-1]:  public exponent e
+ *   bytes [offset+exp_len .. end]:       modulus n
  *
  * Returns 1 on success, 0 on failure.
  */
@@ -417,12 +462,12 @@ int convert_public( const char *infile, const char *outfile )
     }
 
     char line[ MAX_LINE ];
-    char full_b64[ 4096 ] = { 0 };  // Accumulates the full base64 key blob
+    char full_b64[ 4096 ] = { 0 };  // Accumulates the complete base64 key blob
     int  found = 0;
 
     while ( fgets( line, sizeof( line ), f ) )
     {
-        // Skip comment lines — BIND .key files begin with "; " comment lines
+        // BIND .key files start with "; " comment lines — skip them
         if ( line[ 0 ] == ';' )
         {
             continue;
@@ -430,7 +475,7 @@ int convert_public( const char *infile, const char *outfile )
 
         line[ strcspn( line, "\r\n" ) ] = 0;
 
-        // Look for the DNSKEY record line
+        // Find the DNSKEY keyword on this line
         char *dnskey = strstr( line, "DNSKEY" );
 
         if ( !dnskey )
@@ -438,18 +483,18 @@ int convert_public( const char *infile, const char *outfile )
             continue;
         }
 
-        // Tokenize the DNSKEY line: name TTL IN DNSKEY flags protocol algorithm blob...
-        // strtok modifies the string in place, splitting on spaces and tabs
-        char *token = strtok( dnskey, " \t" );  // token = "DNSKEY" (the keyword itself)
+        // Tokenize: name TTL IN DNSKEY flags protocol algorithm blob...
+        // strtok splits on spaces/tabs and modifies the string in place
+        char *token = strtok( dnskey, " \t" );  // "DNSKEY"
 
-        token = strtok( NULL, " \t" );           // flags (256 = ZSK, 257 = KSK)
+        token = strtok( NULL, " \t" );           // flags
         printf( "Flags: %s\n", token );
 
-        token = strtok( NULL, " \t" );           // protocol (always 3)
+        token = strtok( NULL, " \t" );           // protocol (skip, always 3)
         token = strtok( NULL, " \t" );           // algorithm number
         printf( "Algorithm: %s\n", token );
 
-        // Everything remaining on this line is the start of the base64 key blob
+        // Collect all remaining tokens on this line as the start of the base64 blob
         token = strtok( NULL, " \t" );
 
         while ( token != NULL )
@@ -460,27 +505,28 @@ int convert_public( const char *infile, const char *outfile )
 
         found = 1;
 
-        // BIND may wrap the base64 blob across multiple lines — read continuation lines
+        // BIND may line-wrap the base64 blob — read and append any continuation lines
         long pos;
 
         while ( ( pos = ftell( f ) ), fgets( line, sizeof( line ), f ) )
         {
             line[ strcspn( line, "\r\n" ) ] = 0;
 
-            // A comment line or empty line signals the end of this record
+            // A comment or blank line marks the end of this record
             if ( line[ 0 ] == ';' || strlen( line ) == 0 )
             {
                 break;
             }
 
-            // If we hit another DNS record, rewind so it can be processed later
+            // If we hit another DNS record, rewind the file position so it
+            // isn't consumed and can be parsed by a future iteration
             if ( strstr( line, "DNSKEY" ) || strstr( line, "IN " ) )
             {
                 fseek( f, pos, SEEK_SET );
                 break;
             }
 
-            // Strip any leading whitespace from the continuation line before appending
+            // Strip leading whitespace before appending the continuation chunk
             char *p = line;
 
             while ( *p == ' ' || *p == '\t' )
@@ -491,7 +537,7 @@ int convert_public( const char *infile, const char *outfile )
             strncat( full_b64, p, sizeof( full_b64 ) - strlen( full_b64 ) - 1 );
         }
 
-        break;  // We only process the first DNSKEY record found
+        break;  // Only process the first DNSKEY record in the file
     }
 
     fclose( f );
@@ -504,7 +550,7 @@ int convert_public( const char *infile, const char *outfile )
 
     printf( "Full base64 blob (%zu chars)\n", strlen( full_b64 ) );
 
-    // Decode the full base64 blob into raw bytes (the DNS wire format)
+    // Decode the full base64 blob into raw bytes (the RFC 3110 wire format)
     unsigned char *blob     = NULL;
     int            blob_len = b64_to_bin( full_b64, &blob );
 
@@ -518,32 +564,29 @@ int convert_public( const char *infile, const char *outfile )
     printf( "Decoded blob: %d bytes = %d bits\n", blob_len, blob_len * 8 );
 
     /*
-     * Parse the RSA DNSKEY wire format (RFC 3110 section 2):
+     * Parse the RSA wire format (RFC 3110 §2):
      *
-     * The first byte tells us how long the exponent field is:
-     *   blob[0] != 0  =>  exponent length = blob[0],            data starts at byte 1
-     *   blob[0] == 0  =>  exponent length = blob[1]<<8|blob[2], data starts at byte 3
+     *   blob[0] != 0  ->  exp_len = blob[0],              data starts at byte 1
+     *   blob[0] == 0  ->  exp_len = blob[1]<<8 | blob[2], data starts at byte 3
      *
-     * After the exponent comes the modulus, filling the rest of the blob.
+     * The exponent e is followed immediately by the modulus n.
      */
-    int exp_len;
-    int offset;
+    int exp_len, offset;
 
     if ( blob[ 0 ] == 0 )
     {
-        // Two-byte exponent length (used for exponents > 255 bytes, rare in practice)
+        // Rare: exponent longer than 255 bytes, length encoded in next two bytes
         exp_len = ( blob[ 1 ] << 8 ) | blob[ 2 ];
         offset  = 3;
     }
     else
     {
-        // One-byte exponent length (the common case — e.g. e=65537 fits in 3 bytes)
+        // Common case: e.g. e=65537 needs only 3 bytes, length fits in one byte
         exp_len = blob[ 0 ];
         offset  = 1;
     }
 
-    // The modulus occupies whatever bytes remain after the exponent
-    int mod_len = blob_len - offset - exp_len;
+    int mod_len = blob_len - offset - exp_len;  // Modulus fills the rest of the blob
 
     printf( "Exponent: %d bytes, Modulus: %d bytes = %d bits\n",
             exp_len, mod_len, mod_len * 8 );
@@ -555,11 +598,11 @@ int convert_public( const char *infile, const char *outfile )
         return 0;
     }
 
-    // Extract e and n as BIGNUMs directly from the wire-format byte arrays
+    // Extract e and n as BIGNUMs from their positions in the wire-format blob
     BIGNUM *e = BN_bin2bn( blob + offset,           exp_len, NULL );  // exponent
     BIGNUM *n = BN_bin2bn( blob + offset + exp_len, mod_len, NULL );  // modulus
 
-    free( blob );   // Raw bytes no longer needed once we have BIGNUMs
+    free( blob );   // Raw wire-format bytes no longer needed
 
     if ( !e || !n )
     {
@@ -569,35 +612,70 @@ int convert_public( const char *infile, const char *outfile )
         return 0;
     }
 
-    // Build an RSA public key — only n and e are needed (no private components)
-    // The NULL third argument to RSA_set0_key() means "no private exponent"
-    RSA *rsa = RSA_new();
+    /*
+     * Build the public key using EVP_PKEY_fromdata().
+     * A public key only needs n and e — no private components.
+     * EVP_PKEY_PUBLIC_KEY tells OpenSSL we are supplying a public-only key.
+     */
+    OSSL_PARAM_BLD *bld = OSSL_PARAM_BLD_new();
 
-    if ( !rsa )
+    if ( !bld )
     {
-        fprintf( stderr, "Error: RSA_new() failed\n" );
+        fprintf( stderr, "Error: OSSL_PARAM_BLD_new() failed\n" );
         BN_free( e );
         BN_free( n );
         return 0;
     }
 
-    if ( RSA_set0_key( rsa, n, e, NULL ) != 1 )
+    if ( !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_N, n ) ||
+         !OSSL_PARAM_BLD_push_BN( bld, OSSL_PKEY_PARAM_RSA_E, e ) )
     {
-        fprintf( stderr, "Error: RSA_set0_key failed\n" );
-        RSA_free( rsa );    // RSA_free will also free n and e since they were set
+        fprintf( stderr, "Error: failed to push RSA parameters into builder\n" );
+        OSSL_PARAM_BLD_free( bld );
+        BN_free( e );
+        BN_free( n );
         return 0;
     }
 
-    // Wrap in EVP_PKEY — same as the private key path, needed for PEM_write_PUBKEY
-    EVP_PKEY *pkey = EVP_PKEY_new();
+    OSSL_PARAM *params = OSSL_PARAM_BLD_to_param( bld );
 
-    if ( !pkey || EVP_PKEY_assign_RSA( pkey, rsa ) != 1 )
+    OSSL_PARAM_BLD_free( bld );
+
+    if ( !params )
     {
-        fprintf( stderr, "Error: EVP_PKEY setup failed\n" );
-        RSA_free( rsa );
-        EVP_PKEY_free( pkey );
+        fprintf( stderr, "Error: OSSL_PARAM_BLD_to_param() failed\n" );
+        BN_free( e );
+        BN_free( n );
         return 0;
     }
+
+    EVP_PKEY_CTX *ctx  = EVP_PKEY_CTX_new_from_name( NULL, "RSA", NULL );
+    EVP_PKEY     *pkey = NULL;
+
+    if ( !ctx )
+    {
+        fprintf( stderr, "Error: EVP_PKEY_CTX_new_from_name() failed\n" );
+        OSSL_PARAM_free( params );
+        BN_free( e );
+        BN_free( n );
+        return 0;
+    }
+
+    if ( EVP_PKEY_fromdata_init( ctx ) <= 0 ||
+         EVP_PKEY_fromdata( ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params ) <= 0 )
+    {
+        fprintf( stderr, "Error: EVP_PKEY_fromdata() failed for public key\n" );
+        EVP_PKEY_CTX_free( ctx );
+        OSSL_PARAM_free( params );
+        BN_free( e );
+        BN_free( n );
+        return 0;
+    }
+
+    EVP_PKEY_CTX_free( ctx );
+    OSSL_PARAM_free( params );
+    BN_free( e );
+    BN_free( n );
 
     FILE *out = fopen( outfile, "w" );
 
@@ -608,9 +686,9 @@ int convert_public( const char *infile, const char *outfile )
         return 0;
     }
 
-    // PEM_write_PUBKEY writes a "PUBLIC KEY" PEM block (PKCS#8 SubjectPublicKeyInfo format).
-    // This is different from PEM_write_RSAPublicKey which writes a bare "RSA PUBLIC KEY" block.
-    // Most tools expect the PKCS#8 format, so PEM_write_PUBKEY is the right choice here.
+    // PEM_write_PUBKEY writes a "PUBLIC KEY" block (PKCS#8 SubjectPublicKeyInfo).
+    // This is preferred over PEM_write_RSAPublicKey ("RSA PUBLIC KEY") because
+    // the PKCS#8 format includes the algorithm identifier and is more widely supported.
     if ( PEM_write_PUBKEY( out, pkey ) != 1 )
     {
         fprintf( stderr, "Error: PEM_write_PUBKEY failed\n" );
@@ -620,7 +698,7 @@ int convert_public( const char *infile, const char *outfile )
     }
 
     fclose( out );
-    EVP_PKEY_free( pkey );  // Also frees rsa and the BIGNUMs inside it
+    EVP_PKEY_free( pkey );
 
     printf( "Success: public key written to %s\n", outfile );
     return 1;
@@ -634,11 +712,12 @@ int convert_public( const char *infile, const char *outfile )
 /*
  * main()
  *
- * Determines which conversion to run based on the input file extension:
+ * Detects the input file type from its extension and routes to the
+ * appropriate converter:
  *   .private  ->  convert_private()  ->  PEM private key
  *   .key      ->  convert_public()   ->  PEM public key
  *
- * Exits with 0 on success, 1 on any error.
+ * Exits 0 on success, 1 on any error.
  */
 int main( int argc, char *argv[] )
 {
@@ -653,9 +732,8 @@ int main( int argc, char *argv[] )
     const char *infile = argv[ 1 ];
     size_t      len    = strlen( infile );
 
-    // Route to the appropriate converter based on the file extension.
-    // We check from the end of the filename string to safely match the extension
-    // regardless of how long the full path or key name is.
+    // Match the extension by checking the tail of the filename string,
+    // so it works correctly regardless of path length or key name length
     if ( len > 8 && strcmp( infile + len - 8, ".private" ) == 0 )
     {
         return convert_private( infile, argv[ 2 ] ) ? 0 : 1;

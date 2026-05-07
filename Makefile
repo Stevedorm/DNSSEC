@@ -92,6 +92,7 @@ keys:
 	@echo
 	@echo All keys were generated successfully!
 
+# Run make clean-keys to remove old key files.
 clean-keys:
 	rm -f keys/jmu-lab/jmu_zsk_public.pem \
 	      keys/jmu-lab/jmu_ksk_public.pem \
