@@ -36,8 +36,6 @@ a:
 	@echo
 	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/a.hex ./signatures/quad_a_sig.b64
 	@echo
-	@echo Below is the output of the signature validation for the A record
-	@echo
 
 # Run make dnskey after executable is compiled to generate 
 # and validate an DNSKEY record signature
@@ -46,8 +44,6 @@ dnskey:
 	@echo Command that was run is seen below
 	@echo
 	./dnssec_sign ~/keys/jmu_ksk_private.pem ./keys/jmu-lab/jmu_ksk_public.pem ./hex_in/dnskey.hex ./signatures/dnskey_jmu.b64
-	@echo
-	@echo Below is the output of the signature validation for the DNSKEY record
 	@echo
 
 # Run make ns after executable is compiled to generate 
@@ -58,8 +54,6 @@ ns:
 	@echo
 	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/ns.hex ./signatures/quad_ns_sig.b64
 	@echo
-	@echo Below is the output of the signature validation for the NS record
-	@echo
 
 # Run make soa after executable is compiled to generate 
 # and validate an SOA record signature
@@ -68,8 +62,6 @@ soa:
 	@echo Command that was run is seen below
 	@echo
 	./dnssec_sign ~/keys/jmu_zsk_private.pem ./keys/jmu-lab/jmu_zsk_public.pem ./hex_in/new_soa.hex ./signatures/soa.b64
-	@echo
-	@echo Below is the output of the signature validation for the SOA record
 	@echo
 
 # Run make keys to generate all of the key files to .pem files
